@@ -31,7 +31,7 @@ class FileAccessService:
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
     def _check_permission(self, path: str) -> str:
-        resolved = str(Path(path).resolve())
+        resolved = str(Path(path).expanduser().resolve())
         if not permissions_config.is_path_allowed(resolved):
             raise PermissionDeniedError(
                 f"Access denied: '{path}' is not in the allowed directories.\n"

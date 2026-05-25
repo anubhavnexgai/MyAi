@@ -4,8 +4,14 @@ from __future__ import annotations
 import logging
 import os
 
-from twilio.rest import Client
-from twilio.twiml.messaging_response import MessagingResponse
+try:
+    from twilio.rest import Client
+    from twilio.twiml.messaging_response import MessagingResponse
+    _HAS_TWILIO = True
+except ImportError:
+    Client = None  # type: ignore
+    MessagingResponse = None  # type: ignore
+    _HAS_TWILIO = False
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +29,7 @@ class WhatsAppService:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.account_sid and self.auth_token and self.whatsapp_number)
+        return _HAS_TWILIO and bool(self.account_sid and self.auth_token and self.whatsapp_number)
 
     @property
     def client(self) -> Client:
@@ -56,6 +62,8 @@ class WhatsAppService:
     @staticmethod
     def create_twiml_response(body: str) -> str:
         """Create a TwiML response for incoming WhatsApp messages."""
+        if not _HAS_TWILIO:
+            return f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{body}</Message></Response>'
         resp = MessagingResponse()
         resp.message(body)
         return str(resp)

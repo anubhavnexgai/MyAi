@@ -4,7 +4,7 @@ Workspace layout (under app/workspace/):
 
     identity.md      — global MyAi identity (default persona)
     soul.md          — global hard rules (applied to every persona)
-    user.md          — about Anubhav (always injected)
+    user.md          — about the user (always injected)
     tools.md         — tool-usage guidance (always injected)
     heartbeat.md     — read by the heartbeat loop, not the chat loop
     agents/<name>/identity.md    — per-persona identity (overrides global identity)
@@ -91,6 +91,32 @@ class PersonaLoader:
     def _compose_uncached(self, persona: str) -> str:
         sections: list[str] = []
 
+        # Read user facts up front so we can wrap and place them.
+        global_user = self._read(self.root / "user.md")
+        per_user = self.root / "agents" / persona / "user.md"
+        per_user_text = self._read(per_user) if (persona != DEFAULT_PERSONA and per_user.is_file()) else ""
+
+        # 0. USER FACTS (FIRST) — small models (qwen2.5:7b) often ignore
+        # facts buried later in long system prompts. Putting them first AND
+        # last with explicit directives gives the best recall behaviour.
+        if global_user.strip() or per_user_text.strip():
+            joined = global_user
+            if per_user_text.strip():
+                joined = joined.rstrip() + "\n\n" + per_user_text
+            top_wrap = (
+                "## CRITICAL — DURABLE FACTS ABOUT THE USER\n\n"
+                "Before answering ANY personal question (the user's name, role, "
+                "schedule, preferences, what they're working on, what they're "
+                "preparing for, what they like, who they manage, etc.) you MUST "
+                "scan the section below and quote or paraphrase the relevant line. "
+                "If no relevant fact exists here, say honestly: \"I don't have "
+                "that in my notes — could you tell me?\" NEVER invent details "
+                "about the user (no fake roles, no fake schedules, no fake "
+                "projects).\n\n"
+                + joined
+            )
+            sections.append(top_wrap)
+
         # 1. Identity (per-persona overrides global)
         per_identity = self.root / "agents" / persona / "identity.md"
         global_identity = self.root / "identity.md"
@@ -109,16 +135,35 @@ class PersonaLoader:
         if persona != DEFAULT_PERSONA and per_soul.is_file():
             sections.append(self._read(per_soul))
 
-        # 4. Global user
-        sections.append(self._read(self.root / "user.md"))
-
-        # 5. Per-persona user (additive)
-        per_user = self.root / "agents" / persona / "user.md"
-        if persona != DEFAULT_PERSONA and per_user.is_file():
-            sections.append(self._read(per_user))
-
-        # 6. Global tools guidance
+        # 4. Tools guidance
         sections.append(self._read(self.root / "tools.md"))
+
+        # 4b. Auto-applied learned rules from the feedback engine.
+        # These get appended as MyAi receives thumbs-down feedback over time.
+        learned = self._read(self.root / "learned_rules.md")
+        if learned.strip():
+            sections.append(
+                "## Active learned rules\n\n"
+                "These rules were auto-applied by the learning engine based "
+                "on past user feedback. Follow them on every turn.\n\n"
+                + learned
+            )
+
+        # 5. User facts AGAIN at the end (recency bias — last thing the model
+        # sees before the user's message).
+        if global_user.strip() or per_user_text.strip():
+            joined = global_user
+            if per_user_text.strip():
+                joined = joined.rstrip() + "\n\n" + per_user_text
+            tail_wrap = (
+                "## REMINDER — DURABLE FACTS ABOUT THE USER (re-stated)\n\n"
+                "These are the same facts as the CRITICAL section above. They "
+                "are repeated here because the most recent system content has "
+                "the strongest influence on small models. Use these — do not "
+                "invent.\n\n"
+                + joined
+            )
+            sections.append(tail_wrap)
 
         # Filter empties and join with clear separators
         body = "\n\n---\n\n".join(s for s in sections if s.strip())

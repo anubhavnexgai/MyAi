@@ -295,7 +295,7 @@ class SlackBot:
                     )
                 return (
                     "No profile set yet. Set one with:\n\n"
-                    "`/profile name:Anubhav role:Software Engineer bio:I work on frontend and API integrations`"
+                    "`/profile name:Your Name role:Your Role bio:A short description about you`"
                 )
 
             name = role = bio = ""

@@ -50,6 +50,28 @@ _RE_REMINDER = re.compile(
     re.IGNORECASE,
 )
 
+_RE_REMEMBER = re.compile(
+    r"^(?:please\s+|can you\s+|could you\s+)?"
+    r"(?:remember(?:\s+that)?|note(?:\s+that)?|from now on|going forward)"
+    r"[:\s,]+(.+)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# Personal-question recall: "what is my X" / "what am I X-ing" / "based on
+# what you remember about me, ..." Always answer from user.md, never invent.
+_RE_RECALL = re.compile(
+    r"^(?:based on what you (?:remember|know) about me[,\s]+|"
+    r"from your notes about me[,\s]+|"
+    r"from what you know about me[,\s]+)?"
+    r"(?:what(?:'s| is| are)\s+my\b"
+    r"|what\s+am\s+i\s+(?:preparing|working|doing|planning|building)\b"
+    r"|who\s+(?:is|am)\s+(?:my|i)\b"
+    r"|when\s+(?:is|am)\s+my\b"
+    r"|what\s+do\s+you\s+(?:remember|know)\s+about\s+me\b"
+    r"|do you remember\b)",
+    re.IGNORECASE,
+)
+
 _RE_EMAIL = re.compile(
     r"(?:send|draft|write)\s+(?:an?\s+)?(?:email|mail)\s+to\s+([\w.+-]+@[\w.-]+)"
     r"(?:\s+with\s+subject\s+[\"']?(.+?)[\"']?)?"
@@ -87,6 +109,42 @@ _RE_OPEN_URL = re.compile(
 _RE_LATEST_FILE = re.compile(
     r"(?:open|show|view)\s+(?:the\s+|my\s+)?(?:latest|newest|most recent|last)\s+"
     r"(?:file\s+)?(?:I\s+)?(?:downloaded|in\s+downloads?|from\s+downloads?|in\s+my\s+downloads?)?$",
+    re.IGNORECASE,
+)
+
+_RE_LIST_DIR = re.compile(
+    r"(?:list|show|what(?:'s| is)|tell me what(?:'s| is) in)\s+"
+    r"(?:the\s+|all\s+)?(?:files?|contents?|stuff)?\s*"
+    r"(?:in|of|inside|under|from)\s+([~./\w\\:-]+)\s*[?.!]?\s*$",
+    re.IGNORECASE,
+)
+
+_RE_COUNT_FILES = re.compile(
+    r"(?:how many|count(?:\s+the)?)\s+(?:files?|items?|things?)"
+    r"(?:\s+with\s+['\"]?(\w+)['\"]?\s+in\s+(?:the\s+)?(?:name|filename))?"
+    r"\s+(?:are\s+)?(?:in|under|inside)\s+([~./\w\\: -]+?)\s*[?.!]?\s*$",
+    re.IGNORECASE,
+)
+
+_RE_READ_FILE = re.compile(
+    r"(?:read|show me|cat|display|open)\s+"
+    r"(?:the\s+|first\s+\d+\s+lines?\s+of\s+|contents?\s+of\s+)?"
+    r"(?:the\s+)?(?:file\s+)?([~./\w\\:-]+\.(?:md|py|txt|json|yml|yaml|toml|cfg|ini|csv|html|css|js|ts|sh|log))"
+    r"(?:\s+(?:in|from|under)\s+([~./\w\\:-]+))?\s*[?.!]?\s*$",
+    re.IGNORECASE,
+)
+
+# read-then-summarize / explain / describe — common ask, model often picks
+# the wrong tool. We intercept, read the file, then ask the LLM to summarize
+# only the loaded content.
+_RE_READ_AND_DO = re.compile(
+    r"(?:read|summari[sz]e|explain|describe|tell me about|what(?:'s| is)\s+in)\s+"
+    r"(?:the\s+|contents?\s+of\s+)?(?:the\s+)?(?:file\s+)?"
+    r"([~./\w\\:-]+\.(?:md|py|txt|json|yml|yaml|toml|cfg|ini|csv|html|css|js|ts|sh|log))"
+    r"(?:\s+(?:in|from|under)\s+([~./\w\\:-]+|the\s+\w+\s+folder))?"
+    r"(?:\s+(?:and\s+)?(?:give me\s+(?:a\s+)?summary|summari[sz]e it"
+    r"|explain it|describe it|tell me what it says))?"
+    r"\s*[?.!]?\s*$",
     re.IGNORECASE,
 )
 
@@ -129,6 +187,162 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
                 "removing files. This action is blocked by security policy "
                 "for your safety.")
 
+    # ---- 1a0. Personal-question recall — focused 2-msg ollama call -------
+    # Skip recall for system/hardware queries that need tools, not notes
+    _system_keywords = ("cpu", "ram", "memory", "disk", "battery", "ip address",
+                        "system info", "git status", "screenshot", "screen",
+                        "clipboard", "usage", "storage", "uptime")
+    _is_system_q = any(kw in text.lower() for kw in _system_keywords)
+    if _RE_RECALL.match(text) and not _is_system_q:
+        try:
+            user_md = Path(__file__).resolve().parents[1] / "workspace" / "user.md"
+            facts = user_md.read_text(encoding="utf-8") if user_md.is_file() else ""
+            if facts.strip():
+                logger.info("RECALL intercept fired for: %r", text[:80])
+                sys_prompt = (
+                    "You are MyAi answering a personal question about the user. "
+                    "Below are the durable facts you have on file. Use ONLY these "
+                    "facts to answer. If the answer isn't here, reply honestly: "
+                    "\"I don't have that in my notes — could you tell me?\" "
+                    "Cite the exact phrase from the notes when you can.\n\n"
+                    "=== USER NOTES ===\n"
+                    + facts
+                    + "\n=== END NOTES ==="
+                )
+                result = await ollama.chat(messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": text},
+                ])
+                answer = (result.get("message", {}).get("content") or "").strip()
+                if answer:
+                    return answer
+        except Exception as exc:
+            logger.warning("recall intercept failed: %s — falling through", exc)
+
+    # ---- 1a. File ops — list / read / count (deterministic) -------------
+    m = _RE_LIST_DIR.match(text)
+    if m:
+        path = m.group(1).strip().strip('"\'')
+        logger.info("LIST_DIR intercept fired: path=%r", path)
+        try:
+            return await tools.execute(
+                "list_directory", {"path": path}, actor="intercept"
+            )
+        except Exception as exc:
+            logger.warning("list_directory intercept failed: %s — falling through", exc)
+
+    m = _RE_COUNT_FILES.match(text)
+    if m:
+        substr = (m.group(1) or "").strip().lower()
+        path = m.group(2).strip().strip('"\'')
+        try:
+            listing = await tools.execute(
+                "list_directory", {"path": path}, actor="intercept"
+            )
+            lines = [ln for ln in listing.splitlines()
+                     if ln.strip().startswith(("📁", "📄"))]
+            if substr:
+                matches = [ln for ln in lines if substr in ln.lower()]
+                return (f"Counted {len(matches)} item(s) with '{substr}' in the "
+                        f"name under {path}.\n\n" + "\n".join(matches[:30]))
+            return f"Counted {len(lines)} item(s) in {path}."
+        except Exception as exc:
+            logger.warning("count_files intercept failed: %s — falling through", exc)
+
+    # Read-then-summarize: load file content, then ask LLM to summarize only that
+    m = _RE_READ_AND_DO.match(text)
+    if m:
+        logger.info("READ_AND_DO regex matched: groups=%s", m.groups())
+    if m and any(w in text.lower() for w in ("summar", "explain", "describe",
+                                              "tell me about", "what's in",
+                                              "what is in")):
+        logger.info("READ_AND_DO intercept FIRING")
+        fname = m.group(1).strip().strip('"\'')
+        folder_hint = (m.group(2) or "").strip().strip('"\'')
+        looks_like_path = bool(folder_hint) and (
+            folder_hint.startswith(("~", "/", "."))
+            or "\\" in folder_hint
+            or "/" in folder_hint
+            or (len(folder_hint) > 1 and folder_hint[1] == ":")
+        )
+        candidate = fname
+        if looks_like_path and not (fname.startswith(("/", "~"))
+                                    or (len(fname) > 1 and fname[1] == ":")):
+            from pathlib import Path as _P
+            candidate = str(_P(folder_hint) / fname)
+        try:
+            content = await tools.execute(
+                "read_file", {"path": candidate}, actor="intercept"
+            )
+            # Truncate to keep model context tight
+            snippet = content[:6000]
+            verb = "Summarize"
+            low = text.lower()
+            if "explain" in low: verb = "Explain"
+            elif "describe" in low: verb = "Describe"
+            elif "tell me about" in low: verb = "Tell me about"
+            prompt = (
+                f"{verb} the following file ({fname}) for me. "
+                f"Be concise and use bullet points where useful.\n\n"
+                f"```\n{snippet}\n```"
+            )
+            result = await ollama.chat(messages=[
+                {"role": "system",
+                 "content": "You are MyAi summarizing a file the user just loaded. "
+                            "Stay concise. Cite section names where helpful."},
+                {"role": "user", "content": prompt},
+            ])
+            summary = (result.get("message", {}).get("content") or "").strip()
+            return summary or "I couldn't summarize that file."
+        except Exception as exc:
+            logger.warning("read-and-summarize intercept failed: %s — falling through", exc)
+
+    m = _RE_READ_FILE.match(text)
+    if m:
+        fname = m.group(1).strip().strip('"\'')
+        folder_hint = (m.group(2) or "").strip().strip('"\'')
+        # Only use folder hint if it looks like a real path; otherwise the
+        # bare filename + permission system's home-rooted search will handle it.
+        looks_like_path = bool(folder_hint) and (
+            folder_hint.startswith(("~", "/", "."))
+            or "\\" in folder_hint
+            or "/" in folder_hint
+            or (len(folder_hint) > 1 and folder_hint[1] == ":")
+        )
+        candidate = fname
+        if looks_like_path and not (fname.startswith(("/", "~"))
+                                    or (len(fname) > 1 and fname[1] == ":")):
+            from pathlib import Path as _P
+            candidate = str(_P(folder_hint) / fname)
+        try:
+            return await tools.execute(
+                "read_file", {"path": candidate}, actor="intercept"
+            )
+        except Exception as exc:
+            logger.warning("read_file intercept failed: %s — falling through", exc)
+
+    # ---- 1b. Remember / preference (write directly to user.md) -----------
+    m = _RE_REMEMBER.match(text)
+    if m:
+        fact = m.group(1).strip().rstrip(".!?")
+        if fact and len(fact) <= 400:
+            try:
+                user_md = Path(__file__).resolve().parents[1] / "workspace" / "user.md"
+                marker = "<!-- DREAMING_APPEND_BELOW -->"
+                content = user_md.read_text(encoding="utf-8")
+                line = f"- {fact}"
+                if line in content:
+                    return f"Already remembered: {fact}"
+                if marker in content:
+                    new = content.replace(marker, f"{marker}\n{line}", 1)
+                else:
+                    new = content.rstrip() + f"\n\n## Things to remember\n\n{marker}\n{line}\n"
+                user_md.write_text(new, encoding="utf-8")
+                logger.info("Remember intercept saved fact: %s", fact)
+                return f"Got it — I'll remember: {fact}"
+            except Exception as exc:
+                logger.warning("Remember intercept failed: %s — falling through", exc)
+
     # ---- 2. Reminder -----------------------------------------------------
     m = _RE_REMINDER.match(text)
     if m:
@@ -160,10 +374,12 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
                 f"SUBJECT: <subject line>\n"
                 f"BODY:\n<email body>"
             )
+            from app.config import settings as _settings
+            _sign_name = _settings.myai_user_name or "User"
             draft = await ollama.chat(messages=[
                 {"role": "system",
-                 "content": "You draft professional emails. Reply ONLY in "
-                            "the format requested. Sign off as Anubhav Choudhury."},
+                 "content": f"You draft professional emails. Reply ONLY in "
+                            f"the format requested. Sign off as {_sign_name}."},
                 {"role": "user", "content": draft_prompt},
             ])
             draft_text = draft.get("message", {}).get("content", "").strip()
@@ -176,7 +392,11 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
                 subject = sm.group(1).strip()
             if bm:
                 body = bm.group(1).strip()
-            return await tools._send_email(to, subject, body)
+            return await tools.execute(
+                "send_email",
+                {"to": to, "subject": subject, "body": body},
+                actor="intercept",
+            )
         except Exception as exc:
             logger.warning("Email intercept failed: %s — falling through", exc)
 
@@ -184,7 +404,11 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
     m = _RE_WHATSAPP.match(text)
     if m:
         try:
-            return await tools._send_whatsapp(m.group(1).strip(), m.group(2).strip())
+            return await tools.execute(
+                "send_whatsapp",
+                {"phone": m.group(1).strip(), "message": m.group(2).strip()},
+                actor="intercept",
+            )
         except Exception as exc:
             logger.warning("WhatsApp intercept failed: %s", exc)
 
@@ -194,7 +418,7 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
         app = m.group(1).strip().lower()
         app = _APP_NORMALIZE.get(app, app)
         try:
-            return await tools._app_launcher(app)
+            return await tools.execute("app_launcher", {"app_name": app}, actor="intercept")
         except Exception as exc:
             logger.warning("App-launch intercept failed: %s", exc)
 
@@ -244,9 +468,14 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
             "browse", "browser", "in the browser", "and tell me",
             "and search", "trending",
         ])
-        if not is_url and not is_browser_task:
+        is_system_cmd = any(kw in fq for kw in [
+            "git status", "system info", "cpu", "ram", "memory", "disk",
+            "battery", "screenshot", "clipboard", "reminder", "email",
+            "search", "whatsapp", "goal", "status of",
+        ])
+        if not is_url and not is_browser_task and not is_system_cmd:
             try:
-                result = await tools._open_file(file_query)
+                result = await tools.execute("open_file", {"path": file_query}, actor="intercept")
                 if "not found" not in result.lower():
                     return result
             except Exception as exc:
@@ -256,12 +485,19 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
     m = _RE_BROWSE.match(text)
     if m:
         target = m.group(1).strip().lower()
+        # Fire browse_web (which goes through the critic) when the user clearly
+        # wants browser-based interaction. "using the browser" / "in the browser"
+        # are the strongest hints — without this we used to drop those prompts
+        # past the critic entirely (they'd fall through to a chatty LLM answer).
         if (any(d in target for d in (".com", ".org", ".io", ".dev", ".ai", ".net"))
                 or target.startswith("http")
                 or "google" in target
-                or "search" in text.lower()):
+                or "search" in text.lower()
+                or "using the browser" in text.lower()
+                or "in the browser" in text.lower()
+                or "via the browser" in text.lower()):
             try:
-                return await tools._browse_web(text)
+                return await tools.execute("browse_web", {"task": text}, actor="intercept")
             except Exception as exc:
                 logger.warning("Browse intercept failed: %s", exc)
 
@@ -269,7 +505,9 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
     m = _RE_ORCHESTRATE.match(text)
     if m:
         try:
-            return await tools._orchestrate(m.group(1).strip())
+            return await tools.execute(
+                "orchestrate", {"task": m.group(1).strip()}, actor="intercept"
+            )
         except Exception as exc:
             logger.warning("Orchestrate intercept failed: %s", exc)
 
@@ -288,8 +526,11 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
             ])
             content = draft.get("message", {}).get("content", "").strip()
             if content:
-                await tools._type_in_app(app=app_name, text=content)
-                return f"Opened {app_name} and typed the content."
+                # Goes through approval queue because type_in_app is approval-required
+                return await tools.execute(
+                    "type_in_app", {"app": app_name, "text": content},
+                    actor="intercept",
+                )
         except Exception as exc:
             logger.warning("Type-in-app intercept failed: %s", exc)
 

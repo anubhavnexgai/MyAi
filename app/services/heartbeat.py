@@ -35,6 +35,38 @@ class HeartbeatService:
         self.agent = agent
         self._tasks: dict[str, asyncio.Task] = {}
         self._last_msg: dict[str, str] = {}
+        # Track last dreamed date per persona so we run dreaming once per day.
+        self._last_dreamed: dict[str, str] = {}
+
+    async def _maybe_dream(self, persona: str) -> None:
+        """Run the diary/dreaming loop for yesterday once per day.
+
+        Fires when local time is past 02:00 and we haven't yet dreamed for
+        yesterday's journal. Idempotent — repeated calls inside the same day
+        are no-ops.
+        """
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        if now.hour < 2:
+            return
+        target_date = (now.date() - timedelta(days=1))
+        target_iso = target_date.isoformat()
+        if self._last_dreamed.get(persona) == target_iso:
+            return
+        try:
+            from app.services.diary import get_diary_service
+            diary = get_diary_service()
+            result = await diary.consolidate(persona=persona, on=target_date)
+            self._last_dreamed[persona] = target_iso
+            logger.info(
+                "Dreaming complete for %s on %s: %s entries, %s facts added",
+                persona, target_iso,
+                result.get("entries_processed"),
+                result.get("facts_added"),
+            )
+        except Exception as exc:
+            logger.warning("Dreaming failed for %s on %s: %s",
+                           persona, target_iso, exc)
 
     async def start_all(
         self,
@@ -76,6 +108,16 @@ class HeartbeatService:
             return
 
     async def _tick(self, persona: str) -> None:
+        # Respect global pause — heartbeats stay silent while paused
+        from app.services.pause import get_pause
+        if get_pause().is_paused:
+            return
+
+        # Once-per-day: run the dreaming loop for yesterday's journal.
+        # Triggers when (a) it's after 02:00 local time AND (b) we haven't
+        # dreamed for that date yet in this process.
+        await self._maybe_dream(persona)
+
         loader = get_persona_loader()
         hb_text = loader.heartbeat_text(persona)
         if not hb_text.strip():

@@ -2,21 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e ".[full]"
 
-# Copy app code
 COPY . .
 
-# Create data directories
-RUN mkdir -p data/chroma
+RUN mkdir -p data/chroma data/uploads
 
-EXPOSE 8000
+EXPOSE 8001
 
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "app.main", "--web-only"]

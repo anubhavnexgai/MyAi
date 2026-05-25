@@ -235,6 +235,32 @@ async def upload_attachment(req: web.Request) -> web.Response:
         return web.json_response({"error": str(exc)[:300]}, status=500)
 
 
+# --- Pause / resume endpoints ---------------------------------------------
+# Global on/off switch for the user. While paused: chat returns a
+# "paused" message instantly and heartbeat ticks are skipped. On pause
+# we also ping Ollama with keep_alive=0 so the model unloads from VRAM,
+# freeing the GPU for whatever else the user is doing.
+async def pause_state(req: web.Request) -> web.Response:
+    from app.services.pause import get_pause
+    return web.json_response(get_pause().state())
+
+
+async def pause_now(req: web.Request) -> web.Response:
+    from app.services.pause import get_pause
+    body = {}
+    try:
+        body = await req.json()
+    except Exception:
+        pass
+    state = await get_pause().pause(reason=str(body.get("reason", "")))
+    return web.json_response(state)
+
+
+async def resume_now(req: web.Request) -> web.Response:
+    from app.services.pause import get_pause
+    return web.json_response(get_pause().resume())
+
+
 async def simulate_transcript(req: web.Request) -> web.Response:
     """Dev-only endpoint: inject transcript text and immediately generate a suggestion."""
     try:
@@ -657,6 +683,16 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                     continue
 
                 if msg_type == "message":
+                    # Hard pause — nothing fires while MyAi is paused, including
+                    # pre-intercepts. Frontend should also disable input visually.
+                    from app.services.pause import get_pause as _get_pause
+                    if _get_pause().is_paused:
+                        await ws.send_json({
+                            "type": "response",
+                            "text": "⏸️ MyAi is paused. Click Resume in the header to continue.",
+                            "source": "paused",
+                        })
+                        continue
                     text = (data.get("text") or "").strip()
 
                     # Attachments arrive as a list of {path, name, kind} objects
@@ -793,8 +829,9 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                                     f"SUBJECT: <subject line>\n"
                                     f"BODY:\n<email body>"
                                 )
+                                _sign_off = settings.myai_user_name or "User"
                                 _draft_result = await ollama_client.chat(messages=[
-                                    {"role": "system", "content": "You draft professional emails. Reply ONLY in the format requested. Sign off as Anubhav Choudhury."},
+                                    {"role": "system", "content": f"You draft professional emails. Reply ONLY in the format requested. Sign off as {_sign_off}."},
                                     {"role": "user", "content": _draft_prompt},
                                 ])
                                 _draft_text = _draft_result.get("message", {}).get("content", "").strip()
@@ -918,10 +955,15 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                             if _open_match:
                                 _file_query = _open_match.group(1).strip()
                                 _fq = _file_query.lower()
-                                # Skip if it looks like a URL, app name, or browser task
+                                # Skip if it looks like a URL, app name, browser task, or system command
                                 _is_url = _fq.startswith("http") or _re.search(r"\.\w{2,3}$", _fq) and "." in _fq and " " not in _fq
                                 _is_browser_task = any(kw in text.lower() for kw in ["browse", "browser", "in the browser", "and tell me", "and search", "trending"])
-                                if not _is_url and not _is_browser_task:
+                                _is_system_cmd = any(kw in _fq for kw in [
+                                    "git status", "system info", "cpu", "ram", "memory", "disk",
+                                    "battery", "screenshot", "clipboard", "reminder", "email",
+                                    "search", "whatsapp", "goal", "status of",
+                                ])
+                                if not _is_url and not _is_browser_task and not _is_system_cmd:
                                     _result = await tool_registry._open_file(_file_query)
                                     if "not found" not in _result.lower():
                                         await ws.send_json({
@@ -1081,6 +1123,56 @@ async def _handle_web_command(text: str, user_id: str, user_name: str) -> str | 
     if text.strip() == "/admin":
         return "OPEN_ADMIN"
 
+    # Handle /create-persona <name> <description>
+    if text.startswith("/create-persona "):
+        parts = text[16:].strip().split(" ", 1)
+        if len(parts) < 2:
+            return "Usage: /create-persona <name> <description>"
+        p_name = parts[0].lower().strip()
+        p_desc = parts[1].strip()
+        try:
+            persona_dir = Path(__file__).parent / "workspace" / "agents" / p_name
+            persona_dir.mkdir(parents=True, exist_ok=True)
+            identity_md = persona_dir / "identity.md"
+            if not identity_md.exists():
+                # Use LLM to generate a proper persona identity
+                draft_prompt = (
+                    f"Create a persona identity file for an AI assistant persona named '{p_name}'.\n"
+                    f"Description: {p_desc}\n\n"
+                    f"Write it in this exact markdown format:\n"
+                    f"# Identity — {p_name.capitalize()}\n\n"
+                    f"**Name:** {p_name.capitalize()}\n"
+                    f"**Role:** (based on description)\n"
+                    f"**Vibe:** (personality in 1 sentence)\n\n"
+                    f"## What {p_name.capitalize()} does\n\n(3-5 bullet points)\n\n"
+                    f"## What {p_name.capitalize()} does NOT do\n\n(2-3 bullet points)\n\n"
+                    f"## Voice\n\n(2-3 bullet points about communication style)\n\n"
+                    f"Output ONLY the markdown. No explanations."
+                )
+                draft_result = await ollama_client.chat(messages=[
+                    {"role": "system", "content": "You generate persona identity files for AI assistants. Output only markdown."},
+                    {"role": "user", "content": draft_prompt},
+                ])
+                content = draft_result.get("message", {}).get("content", "").strip()
+                if not content or len(content) < 50:
+                    content = (
+                        f"# Identity — {p_name.capitalize()}\n\n"
+                        f"**Name:** {p_name.capitalize()}\n"
+                        f"**Role:** {p_desc}\n"
+                        f"**Vibe:** Helpful and focused.\n\n"
+                        f"## What {p_name.capitalize()} does\n\n"
+                        f"- {p_desc}\n"
+                        f"- Stays concise and actionable\n"
+                    )
+                identity_md.write_text(content, encoding="utf-8")
+                # Reload persona cache
+                from app.agent.persona import get_persona_loader
+                get_persona_loader()._cache.pop(p_name, None)
+            return f"Persona **{p_name.capitalize()}** created! Click their avatar to start chatting."
+        except Exception as e:
+            logger.error(f"Create persona error: {e}", exc_info=True)
+            return f"Failed to create persona: {str(e)[:200]}"
+
     # Handle /remind command
     if text.startswith("/remind "):
         parts = text[8:].strip()
@@ -1216,7 +1308,7 @@ async def whatsapp_webhook(req: web.Request) -> web.Response:
         async def _process_wa_background():
             try:
                 result = await agent.process_message(
-                    user_id_for_msg, body, user_name="Anubhav",
+                    user_id_for_msg, body, user_name=settings.myai_user_name or "User",
                     conversation_id=wa_conv_id,
                 )
                 response_text = result.get("text", "Sorry, something went wrong.")
@@ -1520,6 +1612,9 @@ def create_debug_app() -> web.Application:
     app.router.add_get("/api/debug/sessions", debug_sessions)
     app.router.add_post("/api/upload", upload_attachment)
     app.router.add_static("/uploads", str(Path(__file__).parent.parent / "data" / "uploads"), show_index=False)
+    app.router.add_get("/api/pause/state", pause_state)
+    app.router.add_post("/api/pause", pause_now)
+    app.router.add_post("/api/resume", resume_now)
 
     # Auth API
     app.router.add_get("/api/auth/setup-status", auth_setup_status)
@@ -1591,15 +1686,13 @@ async def _daily_briefing_loop():
 
             # Generate briefing
             briefing = await generate_briefing(
-                user_name="Anubhav",
+                user_name=settings.myai_user_name or "User",
                 user_id="daily-briefing",
                 ollama=ollama_client,
                 database=database,
             )
-            if briefing and whatsapp_service.is_configured:
-                # Send to user's WhatsApp
-                user_phone = "+917205638079"
-                await whatsapp_service.send_message(user_phone, f"🌅 *MyAi Daily Briefing*\n\n{briefing}")
+            if briefing and whatsapp_service.is_configured and settings.myai_user_phone:
+                await whatsapp_service.send_message(settings.myai_user_phone, f"🌅 *MyAi Daily Briefing*\n\n{briefing}")
                 logger.info("Daily briefing sent via WhatsApp")
 
                 # Also push to web UI if connected
@@ -1703,12 +1796,11 @@ async def run_async(web_only: bool = False):
                     logger.error(f"Failed to send reminder via WebSocket: {e}")
 
         # Always send via WhatsApp if configured (so user gets phone notification)
-        if whatsapp_service.is_configured:
+        if whatsapp_service.is_configured and settings.myai_user_phone:
             clean_msg = message.replace("**", "")
-            user_phone = "+917205638079"
             try:
-                await whatsapp_service.send_message(user_phone, f"🔔 {clean_msg}")
-                logger.info(f"Reminder sent via WhatsApp to {user_phone}")
+                await whatsapp_service.send_message(settings.myai_user_phone, f"🔔 {clean_msg}")
+                logger.info(f"Reminder sent via WhatsApp to {settings.myai_user_phone}")
             except Exception as e:
                 logger.warning(f"WhatsApp reminder failed: {e}")
 
@@ -1757,6 +1849,36 @@ async def run_async(web_only: bool = False):
     except Exception as e:
         logger.warning(f"Heartbeat start failed: {e}")
 
+    # Nightly dreaming loop — runs the diary/dreaming job once per day
+    # (after 02:00 local) without needing the full heartbeat enabled.
+    async def _dream_loop():
+        from datetime import datetime, timedelta
+        from app.services.diary import get_diary_service
+        last_dreamed: dict[str, str] = {}
+        await asyncio.sleep(15)  # let server settle
+        while True:
+            try:
+                now = datetime.now()
+                if now.hour >= 2:
+                    target_date = now.date() - timedelta(days=1)
+                    target_iso = target_date.isoformat()
+                    persona = "default"
+                    if last_dreamed.get(persona) != target_iso:
+                        diary = get_diary_service()
+                        result = await diary.consolidate(persona=persona, on=target_date)
+                        last_dreamed[persona] = target_iso
+                        logger.info(
+                            "Nightly dream done for %s on %s: %s entries -> %s facts",
+                            persona, target_iso,
+                            result.get("entries_processed"),
+                            result.get("facts_added"),
+                        )
+            except Exception as exc:
+                logger.warning("Nightly dream loop error: %s", exc)
+            await asyncio.sleep(3600)  # check hourly
+    asyncio.create_task(_dream_loop())
+    logger.info("Nightly dream loop scheduled (fires after 02:00 local)")
+
     # Start HTTP server (Web UI + debug + WebSocket)
     debug_app = create_debug_app()
     runner = web.AppRunner(debug_app)
@@ -1776,9 +1898,19 @@ async def run_async(web_only: bool = False):
             pass
         return
 
-    # Create and configure Slack app
-    from slack_bolt.async_app import AsyncApp
-    from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+    # Create and configure Slack app (requires: pip install miai[slack])
+    try:
+        from slack_bolt.async_app import AsyncApp
+        from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+    except ImportError:
+        logger.error("slack-bolt not installed. Run: pip install miai[slack]")
+        logger.info("Falling back to web-only mode.")
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            pass
+        return
 
     slack_app = AsyncApp(
         token=settings.slack_bot_token,

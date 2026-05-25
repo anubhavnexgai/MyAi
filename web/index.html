@@ -6,7 +6,9 @@
     <title>MyAi</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/styles.css?v=attach-2026-04-28">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css?v=modern-2026-05-25">
 </head>
 <body>
     <div id="app">
@@ -15,6 +17,7 @@
         <div id="auth-screen" class="auth-screen">
             <div class="auth-container">
                 <div class="auth-logo">
+                    <div class="auth-logo-glow"></div>
                     <h1>MyAi</h1>
                     <p class="auth-subtitle">Enterprise AI Assistant</p>
                 </div>
@@ -74,6 +77,70 @@
             <div class="sidebar-brand">
                 <h1 class="brand-title">MyAi</h1>
                 <p class="brand-subtitle">Enterprise Assistant</p>
+            </div>
+
+            <!-- Persona Avatars -->
+            <div class="sidebar-section persona-section">
+                <div class="section-header">
+                    <span class="section-label">Personas</span>
+                    <button id="btn-add-persona" class="btn-add-persona" title="Create new persona">
+                        <span class="material-symbols-outlined">add</span>
+                    </button>
+                </div>
+                <div id="persona-avatars" class="persona-avatars">
+                    <button class="persona-avatar active" data-persona="default" title="MyAi — Default">
+                        <div class="persona-avatar-ring">
+                            <span class="persona-initial">M</span>
+                        </div>
+                        <span class="persona-name">MyAi</span>
+                        <span class="persona-status-dot online"></span>
+                    </button>
+                    <button class="persona-avatar" data-persona="sam" title="Sam — Sales Dev Rep">
+                        <div class="persona-avatar-ring">
+                            <span class="persona-initial">S</span>
+                        </div>
+                        <span class="persona-name">Sam</span>
+                        <span class="persona-status-dot online"></span>
+                    </button>
+                    <button class="persona-avatar" data-persona="polly" title="Polly — Executive Assistant">
+                        <div class="persona-avatar-ring">
+                            <span class="persona-initial">P</span>
+                        </div>
+                        <span class="persona-name">Polly</span>
+                        <span class="persona-status-dot online"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Create Persona Modal -->
+            <div id="persona-modal" class="modal-overlay hidden">
+                <div class="modal-content persona-modal-content">
+                    <div class="modal-header">
+                        <h3>Create New Persona</h3>
+                        <button id="persona-modal-close" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="modal-hint">Describe who this persona should be. MyAi will create the identity, rules, and behavior.</p>
+                        <div class="persona-suggestions">
+                            <button class="persona-suggestion" data-desc="A fitness coach who tracks workouts, suggests exercises, and motivates me to stay consistent">Fitness Coach</button>
+                            <button class="persona-suggestion" data-desc="A research assistant who finds papers, summarizes findings, and helps with literature reviews">Research Assistant</button>
+                            <button class="persona-suggestion" data-desc="A financial advisor who tracks expenses, suggests budgets, and explains investment concepts">Finance Advisor</button>
+                            <button class="persona-suggestion" data-desc="A creative writing partner who helps brainstorm stories, gives feedback on drafts, and suggests plot ideas">Writing Partner</button>
+                            <button class="persona-suggestion" data-desc="A study buddy who quizzes me, explains concepts, creates flashcards, and keeps me on a study schedule">Study Buddy</button>
+                            <button class="persona-suggestion" data-desc="A DevOps engineer who helps with Docker, CI/CD, cloud infrastructure, and deployment automation">DevOps Engineer</button>
+                        </div>
+                        <div class="auth-field">
+                            <label for="persona-name-input">Name</label>
+                            <input type="text" id="persona-name-input" placeholder="e.g. Coach, Aria, Max" maxlength="20">
+                        </div>
+                        <div class="auth-field">
+                            <label for="persona-desc-input">Description</label>
+                            <textarea id="persona-desc-input" placeholder="Describe the persona's role, personality, and what they should help with..." rows="4"></textarea>
+                        </div>
+                        <div id="persona-create-error" class="auth-error hidden"></div>
+                        <button id="btn-create-persona" class="auth-btn">Create Persona</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Primary Navigation -->
@@ -171,6 +238,10 @@
                     <span class="header-section-label">Chat</span>
                 </div>
                 <div class="header-right">
+                    <button id="btn-pause" class="pause-btn" title="Pause MyAi (frees the GPU)">
+                        <span class="material-symbols-outlined pause-icon">pause</span>
+                        <span class="pause-label">Pause</span>
+                    </button>
                     <div id="model-pill" class="model-pill">
                         <span id="model-pill-name" class="model-pill-text">--</span>
                     </div>
@@ -187,8 +258,13 @@
             <!-- Typing Indicator -->
             <div id="typing-indicator" class="hidden">
                 <div class="typing-wrapper">
-                    <div class="typing-dots">
-                        <span></span><span></span><span></span>
+                    <div class="typing-avatar">
+                        <span class="typing-avatar-letter">A</span>
+                    </div>
+                    <div class="typing-bubble">
+                        <div class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </div>
                     </div>
                     <span class="typing-text">MyAi is thinking...</span>
                 </div>
@@ -259,6 +335,18 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=attach-2026-04-28"></script>
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+    <!-- Prism.js for syntax highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    <script src="/static/app.js?v=modern-2026-05-25"></script>
 </body>
 </html>

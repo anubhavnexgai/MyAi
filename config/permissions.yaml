@@ -2,6 +2,8 @@
 # List directories the agent is allowed to access.
 # The agent cannot read/write outside these paths.
 # Users can also grant access at runtime with /allow <path>
+#
+# If no directories are listed, the agent defaults to the user's home folder.
+# Add your own paths below:
 
-allowed_directories:
-  - C:\Users\anubh
+allowed_directories: []

@@ -101,6 +101,18 @@ class AgentCore:
             self.tools._reminder_user_id = user_id
         t0 = time.monotonic()
 
+        # Hard pause — short-circuit before any LLM / tool work.
+        # Heartbeat-originated turns also respect this so they stay quiet.
+        from app.services.pause import get_pause
+        if get_pause().is_paused:
+            return {
+                "text": "⏸️ MyAi is paused. Click Resume in the header to continue.",
+                "message_id": 0,
+                "conversation_id": conversation_id or "",
+                "source": "paused",
+                "agent_name": None,
+            }
+
         # Detect @persona mention and strip it from the message we route on
         persona, user_text = self._detect_persona(user_text)
         if persona != DEFAULT_PERSONA:
@@ -402,8 +414,17 @@ class AgentCore:
                    "conversation_id": conv.id, "source": "local", "agent_name": None}
 
     async def _chat(self, conv, persona: str = DEFAULT_PERSONA) -> str:
-        """Hybrid agent: LLM classifies intent → code executes tools → LLM synthesizes response."""
+        """Hybrid agent with Life-Harness runtime adaptation for tool-calling reliability."""
+        from app.agent.harness import Harness, ToolCall as HToolCall, _match_tool_name, TOOL_NAMES
+
         system = self._build_system_prompt(persona=persona)
+        harness = Harness()
+
+        # H3+H5: Prepare turn — classify task, get tool hints + cold-start skills
+        user_text = conv.messages[-1].content if conv.messages else ""
+        turn_hints = harness.prepare_turn(user_text)
+        if turn_hints.get("system_injection"):
+            system += "\n\n" + turn_hints["system_injection"]
 
         msgs = [{"role": "system", "content": system}]
         for msg in conv.messages[-20:]:
@@ -417,49 +438,141 @@ class AgentCore:
                 logger.error(f"Ollama failed: {e}", exc_info=True)
                 return f"Couldn't reach Ollama. Make sure it's running and `{self.ollama.model}` is pulled."
 
-        # Step 1: Ask LLM to classify — should it use a tool or answer directly?
+        # Native function-calling path: pass JSON Schema for every tool to
+        # Ollama. qwen2.5 returns structured `tool_calls` in the response
+        # message instead of free-form text — Ollama enforces argument
+        # shapes, eliminating the "wrong arg name" failure class.
+        # Text-parsed tool blocks are still accepted as a fallback for any
+        # model that doesn't produce native tool_calls.
         content = ""
+        TURN_BUDGET_S = 75  # hard wallclock cap per turn — abort runaway loops
+        chat_t0 = time.monotonic()
         for round_num in range(MAX_TOOL_ROUNDS):
+            if time.monotonic() - chat_t0 > TURN_BUDGET_S:
+                logger.warning("Turn budget exceeded (%.1fs) — returning partial",
+                               time.monotonic() - chat_t0)
+                if not content:
+                    content = ("That request needed more time than I'm allowed "
+                               "to spend on a single turn. Please rephrase or "
+                               "break it into smaller steps.")
+                break
+
+            # H4: Inject recovery hints for rounds > 0 when failure detected
+            if round_num > 0:
+                step_hint = harness.get_step_injection()
+                if step_hint:
+                    msgs.append({"role": "user", "content": step_hint})
+                    logger.info("H4 recovery: %s", step_hint[:80])
+
             try:
-                result = await self.ollama.chat(messages=msgs)
+                # H3: Filter tool definitions to relevant subset (reduces confusion)
+                from app.agent.harness import get_tool_hints
+                relevant_tools = get_tool_hints(harness.task_type)
+                filtered_defs = [
+                    td for td in TOOL_DEFINITIONS
+                    if td.get("function", {}).get("name") in relevant_tools
+                ] or TOOL_DEFINITIONS[:10]  # fallback: first 10
+
+                result = await self.ollama.chat(messages=msgs, tools=filtered_defs)
             except Exception as e:
                 logger.error(f"Ollama failed: {e}", exc_info=True)
                 return f"Couldn't reach Ollama. Make sure it's running."
 
             message = result.get("message", {})
-            content = message.get("content", "").strip()
-            logger.info(f"LLM response (round {round_num}): {content[:200]}")
+            content = (message.get("content") or "").strip()
+            native_calls = message.get("tool_calls") or []
+            logger.info(
+                "LLM response (round %d): native_calls=%d content=%s",
+                round_num, len(native_calls), content[:160]
+            )
 
-            # Check if LLM output a tool call block
-            from app.agent.tools import ToolRegistry as TR
-            parsed = TR.parse_tool_call(content)
+            # ---- Native function-calling path ----
+            if native_calls:
+                msgs.append({
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": native_calls,
+                })
+                for tc in native_calls:
+                    fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+                    tool_name = fn.get("name", "")
+                    arguments = fn.get("arguments", {})
+                    if isinstance(arguments, str):
+                        try:
+                            import json as _json
+                            arguments = _json.loads(arguments) if arguments else {}
+                        except Exception:
+                            arguments = {}
+                    if not tool_name:
+                        continue
+                    # H2: Validate/correct tool name via similarity matching
+                    match = _match_tool_name(tool_name, TOOL_NAMES)
+                    if match:
+                        tool_name = match[0]
+                    logger.info(f"Tool call: {tool_name}({arguments})")
+                    tool_result = await self.tools.execute(
+                        tool_name, arguments,
+                        persona=persona, actor="agent",
+                    )
+                    is_error = isinstance(tool_result, str) and any(
+                        w in tool_result.lower()[:60] for w in ("error", "not found", "denied", "failed")
+                    )
+                    # H4: Track in trajectory
+                    harness.record_tool_result(
+                        HToolCall(name=tool_name, args=arguments),
+                        tool_result if isinstance(tool_result, str) else str(tool_result),
+                        is_error,
+                    )
+                    tool_log = _tool_log_ctx.get()
+                    if tool_log is not None:
+                        tool_log.append({
+                            "name": tool_name,
+                            "args": arguments,
+                            "result": tool_result if isinstance(tool_result, str)
+                                      else str(tool_result),
+                        })
+                    msgs.append({
+                        "role": "tool",
+                        "content": tool_result if isinstance(tool_result, str)
+                                   else str(tool_result),
+                    })
+                # H4: Check budget forcing after native tool calls
+                if harness.trajectory.should_force_output():
+                    logger.info("H4 budget-force after native calls")
+                    return harness.trajectory.best_candidate or content
+                continue
 
-            if not parsed:
+            # ---- H2: Multi-format tool call extraction (text fallback) ----
+            from app.agent.harness import extract_tool_call, normalize_answer
+            hr_call = extract_tool_call(content, TOOL_NAMES)
+
+            if not hr_call:
                 # No tool call — check if LLM is faking an action
-                # If the response looks like it's describing a tool action, force a classification
                 if round_num == 0 and self._looks_like_fake_action(content):
-                    logger.info("LLM faked a tool action, forcing re-classification")
+                    logger.info("LLM faked a tool action, forcing re-attempt")
                     msgs.append({"role": "assistant", "content": content})
                     msgs.append({"role": "user", "content": (
                         "You described the action but did NOT execute it. "
-                        "You MUST output a ```tool block to actually perform it. "
-                        "Output ONLY the tool block now."
+                        "Call the appropriate tool now to actually perform it."
                     )})
+                    harness.record_tool_result(None, None, is_error=True)
                     continue
-                # Genuine answer — return it
-                return content
+                # Genuine answer — normalize and return
+                return normalize_answer(content) if content else content
 
-            # Tool call found — execute it
-            tool_name = parsed.get("name", "")
-            arguments = parsed.get("arguments", {})
-            logger.info(f"Tool call: {tool_name}({arguments})")
+            # H2 extracted a tool call
+            tool_name = hr_call.name
+            arguments = hr_call.args
+            logger.info(f"H2 extracted: {tool_name}({arguments}) conf={hr_call.confidence:.2f}")
             tool_result = await self.tools.execute(
                 tool_name, arguments,
                 persona=persona, actor="agent",
             )
+            is_error = isinstance(tool_result, str) and any(
+                w in tool_result.lower()[:60] for w in ("error", "not found", "denied", "failed")
+            )
+            harness.record_tool_result(hr_call, tool_result if isinstance(tool_result, str) else str(tool_result), is_error)
 
-            # Record into the journaling context (no-op if process_message
-            # didn't set one — e.g. a future caller invokes _chat directly).
             tool_log = _tool_log_ctx.get()
             if tool_log is not None:
                 tool_log.append({
@@ -467,8 +580,6 @@ class AgentCore:
                     "args": arguments,
                     "result": tool_result if isinstance(tool_result, str) else str(tool_result),
                 })
-
-            # Step 2: Send tool result back to LLM for natural response
             msgs.append({"role": "assistant", "content": content})
             msgs.append({
                 "role": "user",
@@ -476,7 +587,6 @@ class AgentCore:
                     tool_name=tool_name, result=tool_result
                 ),
             })
-            # Continue loop — LLM will either answer or call another tool
 
         return content or "Sorry, I couldn't complete that request. Please try rephrasing."
 

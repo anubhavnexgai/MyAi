@@ -11,6 +11,12 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    # User identity (personalized during first-run setup)
+    myai_user_name: str = ""
+    myai_user_email: str = ""
+    myai_user_phone: str = ""  # with country code, e.g. +919876543210
+    myai_user_role: str = ""   # e.g. "Software Engineer at Acme Corp"
+
     # Slack
     slack_bot_token: str = ""       # xoxb-...
     slack_app_token: str = ""       # xapp-...
@@ -18,7 +24,7 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1:8b"
+    ollama_model: str = "qwen2.5:7b"
     ollama_embed_model: str = "nomic-embed-text"
     ollama_timeout: int = 120
 

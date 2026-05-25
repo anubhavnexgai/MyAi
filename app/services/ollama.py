@@ -43,6 +43,9 @@ class OllamaClient:
             "model": self.model,
             "messages": messages,
             "stream": False,
+            # Keep the model resident in VRAM forever — first-call latency
+            # drops from ~10s (cold load) to ~1s (warm) for every chat turn.
+            "keep_alive": -1,
             "options": {
                 "temperature": 0.7,
                 "num_predict": 2048,

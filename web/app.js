@@ -1,5 +1,6 @@
 /**
  * MyAi Web UI — WebSocket chat client with authentication.
+ * v2 — Markdown rendering (marked.js) + Syntax highlighting (Prism.js)
  */
 
 (function () {
@@ -9,6 +10,70 @@
     const DEFAULT_WS_URL = `ws://${location.host}/ws`;
     const RECONNECT_DELAY_MS = 3000;
     const MAX_RECONNECT_ATTEMPTS = 10;
+
+    // -- Markdown setup --
+    if (typeof marked !== "undefined") {
+        // marked v12+ uses token-based renderer methods
+        var renderer = {
+            code: function (token) {
+                var code = token.text || "";
+                var lang = (token.lang || "").trim();
+                var langLabel = lang || "code";
+                var highlighted;
+                if (typeof Prism !== "undefined" && lang && Prism.languages[lang]) {
+                    try {
+                        highlighted = Prism.highlight(code, Prism.languages[lang], lang);
+                    } catch (e) {
+                        highlighted = escapeHtmlStr(code);
+                    }
+                } else {
+                    highlighted = escapeHtmlStr(code);
+                }
+                return '<pre><div class="code-header"><span>' + escapeHtmlStr(langLabel) + '</span><button class="copy-btn" onclick="window._copyCode(this)">Copy</button></div><code class="language-' + escapeHtmlStr(langLabel) + '">' + highlighted + '</code></pre>';
+            },
+            link: function (token) {
+                var href = token.href || "";
+                var title = token.title || "";
+                // In marked v12, token.tokens contains the parsed inline content
+                // token.text is the raw text form
+                var text = token.text || "";
+                var titleAttr = title ? ' title="' + escapeHtmlStr(title) + '"' : '';
+                // Use this.parser.parseInline if available for rich link text
+                var rendered = text;
+                if (this && this.parser && token.tokens) {
+                    try { rendered = this.parser.parseInline(token.tokens); } catch(e) { rendered = text; }
+                }
+                return '<a href="' + href + '" target="_blank" rel="noopener"' + titleAttr + '>' + rendered + '</a>';
+            },
+        };
+
+        marked.use({
+            breaks: true,
+            gfm: true,
+            renderer: renderer,
+        });
+    }
+
+    // Inline escapeHtml for use before DOM is guaranteed
+    function escapeHtmlStr(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // Copy code button handler
+    window._copyCode = function (btn) {
+        var pre = btn.closest("pre");
+        if (!pre) return;
+        var code = pre.querySelector("code");
+        if (!code) return;
+        var text = code.textContent || code.innerText;
+        navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = "Copied!";
+            setTimeout(function () { btn.textContent = "Copy"; }, 2000);
+        }).catch(function () {
+            btn.textContent = "Failed";
+            setTimeout(function () { btn.textContent = "Copy"; }, 2000);
+        });
+    };
 
     // -- State --
     let ws = null;
@@ -71,6 +136,7 @@
     function init() {
         bindAuthEvents();
         checkSetup();
+        bindPersonaEvents();
         // Request notification permission early
         if ("Notification" in window && Notification.permission === "default") {
             Notification.requestPermission();
@@ -94,39 +160,141 @@
         localStorage.setItem("myai_settings", JSON.stringify(settings));
     }
 
+    // -- Persona selection --
+    function bindPersonaEvents() {
+        var personaAvatars = document.querySelectorAll(".persona-avatar");
+        personaAvatars.forEach(function (avatar) {
+            avatar.addEventListener("click", function () {
+                personaAvatars.forEach(function (a) { a.classList.remove("active"); });
+                avatar.classList.add("active");
+                var persona = avatar.getAttribute("data-persona");
+                var typingLetter = document.querySelector(".typing-avatar-letter");
+                if (typingLetter) {
+                    typingLetter.textContent = persona.charAt(0).toUpperCase();
+                }
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: "message",
+                        text: "/persona " + persona,
+                        user_id: settings.userId,
+                        user_name: settings.userName,
+                    }));
+                }
+            });
+        });
+
+        // Add Persona button + modal
+        var $addBtn = document.getElementById("btn-add-persona");
+        var $modal = document.getElementById("persona-modal");
+        var $modalClose = document.getElementById("persona-modal-close");
+        var $nameInput = document.getElementById("persona-name-input");
+        var $descInput = document.getElementById("persona-desc-input");
+        var $createBtn = document.getElementById("btn-create-persona");
+        var $error = document.getElementById("persona-create-error");
+
+        if ($addBtn && $modal) {
+            $addBtn.addEventListener("click", function () {
+                $modal.classList.remove("hidden");
+                $nameInput.value = "";
+                $descInput.value = "";
+                $error.classList.add("hidden");
+                setTimeout(function () { $nameInput.focus(); }, 100);
+            });
+
+            $modalClose.addEventListener("click", function () {
+                $modal.classList.add("hidden");
+            });
+
+            $modal.addEventListener("click", function (e) {
+                if (e.target === $modal) $modal.classList.add("hidden");
+            });
+
+            // Suggestion chips
+            var suggestions = document.querySelectorAll(".persona-suggestion");
+            suggestions.forEach(function (chip) {
+                chip.addEventListener("click", function () {
+                    suggestions.forEach(function (s) { s.classList.remove("selected"); });
+                    chip.classList.add("selected");
+                    $descInput.value = chip.getAttribute("data-desc");
+                    if (!$nameInput.value) {
+                        $nameInput.value = chip.textContent.trim().split(" ")[0];
+                    }
+                    $nameInput.focus();
+                });
+            });
+
+            // Create persona
+            $createBtn.addEventListener("click", function () {
+                var name = $nameInput.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+                var desc = $descInput.value.trim();
+
+                if (!name || name.length < 2) {
+                    $error.textContent = "Name must be at least 2 characters (letters, numbers, underscore).";
+                    $error.classList.remove("hidden");
+                    return;
+                }
+                if (!desc || desc.length < 10) {
+                    $error.textContent = "Please provide a meaningful description (at least 10 characters).";
+                    $error.classList.remove("hidden");
+                    return;
+                }
+
+                $error.classList.add("hidden");
+                $createBtn.disabled = true;
+                $createBtn.textContent = "Creating...";
+
+                // Send persona creation command via WebSocket
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: "message",
+                        text: "/create-persona " + name + " " + desc,
+                        user_id: settings.userId,
+                        user_name: settings.userName,
+                    }));
+                }
+
+                // Add avatar to UI immediately
+                var displayName = $nameInput.value.trim();
+                var initial = displayName.charAt(0).toUpperCase();
+                var avatarHtml = '<button class="persona-avatar" data-persona="' + name + '" title="' + displayName + '">' +
+                    '<div class="persona-avatar-ring"><span class="persona-initial">' + initial + '</span></div>' +
+                    '<span class="persona-name">' + displayName + '</span>' +
+                    '<span class="persona-status-dot online"></span></button>';
+
+                var container = document.getElementById("persona-avatars");
+                container.insertAdjacentHTML("beforeend", avatarHtml);
+
+                // Re-bind click events for the new avatar
+                var newAvatar = container.lastElementChild;
+                newAvatar.addEventListener("click", function () {
+                    document.querySelectorAll(".persona-avatar").forEach(function (a) { a.classList.remove("active"); });
+                    newAvatar.classList.add("active");
+                    var typLetter = document.querySelector(".typing-avatar-letter");
+                    if (typLetter) typLetter.textContent = initial;
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: "message", text: "/persona " + name,
+                            user_id: settings.userId, user_name: settings.userName,
+                        }));
+                    }
+                });
+
+                // Close modal
+                setTimeout(function () {
+                    $modal.classList.add("hidden");
+                    $createBtn.disabled = false;
+                    $createBtn.textContent = "Create Persona";
+                }, 500);
+            });
+        }
+    }
+
     // -- Auth Flow --
     async function checkSetup() {
-        try {
-            const res = await fetch("/api/auth/setup-status");
-            const data = await res.json();
-
-            $authLoading.classList.add("hidden");
-
-            if (!data.setup_complete) {
-                // Show setup form
-                $setupForm.classList.remove("hidden");
-                $loginForm.classList.add("hidden");
-            } else {
-                // Check for existing token
-                if (authToken) {
-                    const valid = await validateToken();
-                    if (valid) {
-                        showChat();
-                        return;
-                    }
-                    // Token invalid, clear it
-                    authToken = null;
-                    localStorage.removeItem("myai_auth_token");
-                }
-                // Show login form
-                $loginForm.classList.remove("hidden");
-                $setupForm.classList.add("hidden");
-            }
-        } catch (err) {
-            $authLoading.classList.add("hidden");
-            // Server might not be running, show login form as default
-            $loginForm.classList.remove("hidden");
-        }
+        // Skip login — go directly to chat (personal agent, no auth needed)
+        $authLoading.classList.add("hidden");
+        currentUser = { id: "local-user", display_name: settings.userName, role_level: "super_admin" };
+        showChat();
     }
 
     async function validateToken() {
@@ -325,7 +493,10 @@
 
     function loadChatHistory(conversationId) {
         if (!authToken) {
-            showWelcome();
+            // No auth — show welcome on fresh start, skip history fetch
+            if (!conversationId) {
+                showWelcome();
+            }
             return;
         }
 
@@ -375,7 +546,7 @@
         }
 
         var html = "";
-        html += formatMessage(text);
+        html += renderMessageContent(role, text);
 
         // Format the stored timestamp
         var timeStr = "";
@@ -744,6 +915,46 @@
     }
 
     // ----- Wire up paperclip + drag/drop after DOM is ready ----------------
+    // ----- Pause / resume button -------------------------------------------
+    (function setupPauseUI() {
+        var $btn = document.getElementById("btn-pause");
+        if (!$btn) return;
+        var $icon = $btn.querySelector(".pause-icon");
+        var $label = $btn.querySelector(".pause-label");
+
+        function applyState(paused) {
+            if (paused) {
+                $btn.classList.add("is-paused");
+                $btn.title = "Resume MyAi";
+                if ($icon) $icon.textContent = "play_arrow";
+                if ($label) $label.textContent = "Resume";
+            } else {
+                $btn.classList.remove("is-paused");
+                $btn.title = "Pause MyAi (frees the GPU)";
+                if ($icon) $icon.textContent = "pause";
+                if ($label) $label.textContent = "Pause";
+            }
+        }
+
+        // Hydrate from server on load
+        fetch("/api/pause/state")
+            .then(function (r) { return r.json(); })
+            .then(function (s) { applyState(!!(s && s.paused)); })
+            .catch(function () {});
+
+        $btn.addEventListener("click", function () {
+            var paused = $btn.classList.contains("is-paused");
+            var url = paused ? "/api/resume" : "/api/pause";
+            $btn.disabled = true;
+            fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                         body: JSON.stringify({}) })
+                .then(function (r) { return r.json(); })
+                .then(function (s) { applyState(!!(s && s.paused)); })
+                .catch(function (e) { console.warn("pause toggle failed:", e); })
+                .finally(function () { $btn.disabled = false; });
+        });
+    })();
+
     (function setupAttachUI() {
         var $btn = document.getElementById("btn-attach");
         var $fileInput = document.getElementById("file-input");
@@ -814,9 +1025,9 @@
 
         var html = "";
         if (agent && role === "assistant") {
-            html += '<span class="agent-tag">' + escapeHtml(agent) + '</span>\n';
+            html += '<span class="agent-tag">' + escapeHtml(agent) + '</span>';
         }
-        html += formatMessage(text);
+        html += renderMessageContent(role, text);
         html += '<span class="msg-time">' + formatTime() + '</span>';
 
         // Add feedback buttons for assistant messages
@@ -937,7 +1148,10 @@
 
     function scrollToBottom() {
         requestAnimationFrame(function () {
-            $messages.scrollTop = $messages.scrollHeight;
+            $messages.scrollTo({
+                top: $messages.scrollHeight,
+                behavior: "smooth"
+            });
         });
     }
 
@@ -1247,7 +1461,7 @@
     function renderSkills(skills) {
         $skillsList.innerHTML = "";
         if (!skills.length) {
-            $skillsList.innerHTML = '<div style="color:var(--text-muted);font-size:12px">No skills loaded</div>';
+            $skillsList.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:8px">No skills loaded</div>';
             return;
         }
         for (var i = 0; i < skills.length; i++) {
@@ -1260,7 +1474,26 @@
     }
 
     // -- Formatting --
-    function formatMessage(text) {
+    function renderMessageContent(role, text) {
+        if (role === "assistant" && typeof marked !== "undefined") {
+            // Use marked.js for assistant messages
+            try {
+                var rendered = marked.parse(text);
+                return '<div class="msg-content">' + rendered + '</div>';
+            } catch (e) {
+                // Fallback to basic formatting
+                return '<div class="msg-content">' + formatMessageLegacy(text) + '</div>';
+            }
+        } else if (role === "user") {
+            // User messages: simple text with line breaks
+            return '<div class="msg-content">' + escapeHtml(text).replace(/\n/g, '<br>') + '</div>';
+        } else {
+            // System or other roles
+            return formatMessageLegacy(text);
+        }
+    }
+
+    function formatMessageLegacy(text) {
         // Preserve raw HTML elements (like connect buttons) before escaping
         var rawHtmlParts = [];
         var preserved = text.replace(/<a\s[^>]*>.*?<\/a>/gi, function (match) {
@@ -1291,15 +1524,15 @@
 
         // Links (<url|text> Slack style)
         html = html.replace(/&lt;(https?:\/\/[^|&]+)\|([^&]+)&gt;/g,
-            '<a href="$1" target="_blank" rel="noopener" style="color:var(--accent)">$2</a>');
+            '<a href="$1" target="_blank" rel="noopener">$2</a>');
 
         // Markdown links [text](url)
         html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-            '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent)">$1</a>');
+            '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
         // Plain URLs (only those not already in an href)
         html = html.replace(/(?<!href="|">)(https?:\/\/[^\s<]+)/g,
-            '<a href="$1" target="_blank" rel="noopener" style="color:var(--accent)">$1</a>');
+            '<a href="$1" target="_blank" rel="noopener">$1</a>');
 
         // Restore preserved HTML elements
         for (var i = 0; i < rawHtmlParts.length; i++) {
