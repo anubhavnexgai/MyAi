@@ -992,6 +992,7 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                                     "git status", "system info", "cpu", "ram", "memory", "disk",
                                     "battery", "screenshot", "clipboard", "reminder", "email",
                                     "search", "whatsapp", "goal", "status of",
+                                    "system prompt", "instructions", "prompt",
                                 ])
                                 if not _is_url and not _is_browser_task and not _is_system_cmd:
                                     _result = await tool_registry._open_file(_file_query)
