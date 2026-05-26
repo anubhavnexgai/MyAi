@@ -149,11 +149,115 @@
                     <span class="material-symbols-outlined nav-icon">add_comment</span>
                     <span class="nav-label">New Chat</span>
                 </button>
+                <button id="btn-connectors" class="nav-btn">
+                    <span class="material-symbols-outlined nav-icon">cable</span>
+                    <span class="nav-label">Connectors</span>
+                </button>
                 <a href="#" id="link-admin-dashboard" class="nav-btn hidden">
                     <span class="material-symbols-outlined nav-icon">dashboard</span>
                     <span class="nav-label">Dashboard</span>
                 </a>
             </nav>
+
+            <!-- Connectors Modal -->
+            <div id="connectors-modal" class="modal-overlay hidden">
+                <div class="modal-content connectors-modal-content">
+                    <div class="modal-header">
+                        <h3>Connectors</h3>
+                        <button id="connectors-modal-close" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="modal-hint">Connect your apps so MyAi can read emails, check your calendar, access files, and more.</p>
+                        <div class="connectors-grid">
+
+                            <div class="connector-card" data-connector="microsoft365">
+                                <div class="connector-icon-wrap microsoft">
+                                    <span class="material-symbols-outlined">cloud</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Microsoft 365</h4>
+                                    <p>Outlook email, Calendar, OneDrive files</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-ms365">Not connected</span>
+                                    <button class="connector-btn" id="conn-btn-ms365">Connect</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="google">
+                                <div class="connector-icon-wrap google">
+                                    <span class="material-symbols-outlined">mail</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Google Workspace</h4>
+                                    <p>Gmail, Google Calendar, Drive</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status">Coming soon</span>
+                                    <button class="connector-btn" disabled>Connect</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="slack">
+                                <div class="connector-icon-wrap slack">
+                                    <span class="material-symbols-outlined">tag</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Slack</h4>
+                                    <p>Send messages, read channels, get notifications</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-slack">Not configured</span>
+                                    <button class="connector-btn" id="conn-btn-slack">Setup</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="whatsapp">
+                                <div class="connector-icon-wrap whatsapp">
+                                    <span class="material-symbols-outlined">chat</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>WhatsApp</h4>
+                                    <p>Send and receive messages via Twilio</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-whatsapp">Not configured</span>
+                                    <button class="connector-btn" id="conn-btn-whatsapp">Setup</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="telegram">
+                                <div class="connector-icon-wrap telegram">
+                                    <span class="material-symbols-outlined">send</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Telegram</h4>
+                                    <p>Chat with MyAi from Telegram</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-telegram">Not configured</span>
+                                    <button class="connector-btn" id="conn-btn-telegram">Setup</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="websearch">
+                                <div class="connector-icon-wrap search">
+                                    <span class="material-symbols-outlined">travel_explore</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Web Search</h4>
+                                    <p>DuckDuckGo (free) or Tavily (API key)</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-search">Active</span>
+                                    <button class="connector-btn connected" id="conn-btn-search" disabled>Connected</button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Recent Chats -->
             <div class="sidebar-section">

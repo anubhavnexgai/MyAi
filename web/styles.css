@@ -525,6 +525,105 @@ html, body {
     border-color: var(--accent);
 }
 
+/* ── Connectors Modal ── */
+.connectors-modal-content {
+    max-width: 560px;
+}
+
+.connectors-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.connector-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all var(--transition-fast);
+}
+.connector-card:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-surface-high);
+}
+
+.connector-icon-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.connector-icon-wrap .material-symbols-outlined {
+    font-size: 22px;
+    color: #fff;
+}
+.connector-icon-wrap.microsoft { background: linear-gradient(135deg, #0078d4, #00bcf2); }
+.connector-icon-wrap.google { background: linear-gradient(135deg, #ea4335, #fbbc05); }
+.connector-icon-wrap.slack { background: linear-gradient(135deg, #611f69, #e01e5a); }
+.connector-icon-wrap.whatsapp { background: linear-gradient(135deg, #25d366, #128c7e); }
+.connector-icon-wrap.telegram { background: linear-gradient(135deg, #0088cc, #229ed9); }
+.connector-icon-wrap.search { background: linear-gradient(135deg, #818cf8, #6366f1); }
+
+.connector-info {
+    flex: 1;
+    min-width: 0;
+}
+.connector-info h4 {
+    font-family: var(--font-headline);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 2px;
+}
+.connector-info p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.connector-action {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.connector-status {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+.connector-btn {
+    padding: 6px 16px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-body);
+}
+.connector-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: #fff;
+}
+.connector-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.connector-btn.connected {
+    border-color: var(--success);
+    color: var(--success);
+}
+
 .persona-avatar {
     display: flex;
     flex-direction: column;

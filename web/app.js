@@ -1754,6 +1754,88 @@
             reconnectAttempts = 0;
             setTimeout(connect, 500);
         });
+
+        // ── Connectors modal ──
+        var $connBtn = document.getElementById("btn-connectors");
+        var $connModal = document.getElementById("connectors-modal");
+        var $connClose = document.getElementById("connectors-modal-close");
+        if ($connBtn && $connModal) {
+            $connBtn.addEventListener("click", function () {
+                $connModal.classList.remove("hidden");
+                updateConnectorStatuses();
+            });
+            $connClose.addEventListener("click", function () {
+                $connModal.classList.add("hidden");
+            });
+            $connModal.addEventListener("click", function (e) {
+                if (e.target === $connModal) $connModal.classList.add("hidden");
+            });
+
+            // Microsoft 365 connect
+            var $ms365Btn = document.getElementById("conn-btn-ms365");
+            if ($ms365Btn) {
+                $ms365Btn.addEventListener("click", function () {
+                    window.location.href = "/auth/microsoft?token=" + encodeURIComponent(authToken || "");
+                });
+            }
+
+            // Slack setup
+            var $slackBtn = document.getElementById("conn-btn-slack");
+            if ($slackBtn) {
+                $slackBtn.addEventListener("click", function () {
+                    $connModal.classList.add("hidden");
+                    window._sendSuggestion("How do I set up Slack integration? Give me step by step instructions.");
+                });
+            }
+
+            // WhatsApp setup
+            var $waBtn = document.getElementById("conn-btn-whatsapp");
+            if ($waBtn) {
+                $waBtn.addEventListener("click", function () {
+                    $connModal.classList.add("hidden");
+                    window._sendSuggestion("How do I set up WhatsApp integration with Twilio? Give me step by step instructions.");
+                });
+            }
+
+            // Telegram setup
+            var $tgBtn = document.getElementById("conn-btn-telegram");
+            if ($tgBtn) {
+                $tgBtn.addEventListener("click", function () {
+                    $connModal.classList.add("hidden");
+                    window._sendSuggestion("How do I set up Telegram bot integration? Give me step by step instructions.");
+                });
+            }
+        }
+
+        function updateConnectorStatuses() {
+            fetch("/api/web/status")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var $ms365Status = document.getElementById("conn-status-ms365");
+                    var $ms365Btn = document.getElementById("conn-btn-ms365");
+                    if (data.graph) {
+                        $ms365Status.textContent = "Connected";
+                        $ms365Status.style.color = "var(--success)";
+                        $ms365Btn.textContent = "Connected";
+                        $ms365Btn.classList.add("connected");
+                        $ms365Btn.disabled = true;
+                    }
+
+                    var $searchStatus = document.getElementById("conn-status-search");
+                    var $searchBtn = document.getElementById("conn-btn-search");
+                    if (data.search) {
+                        $searchStatus.textContent = "Active";
+                        $searchStatus.style.color = "var(--success)";
+                        $searchBtn.textContent = "Connected";
+                        $searchBtn.classList.add("connected");
+                    } else {
+                        $searchStatus.textContent = "Not active";
+                        $searchBtn.textContent = "Enable";
+                        $searchBtn.disabled = false;
+                    }
+                })
+                .catch(function () {});
+        }
     }
 
     function autoResize() {
