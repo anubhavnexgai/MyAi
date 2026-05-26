@@ -1813,12 +1813,17 @@
                 .then(function (data) {
                     var $ms365Status = document.getElementById("conn-status-ms365");
                     var $ms365Btn = document.getElementById("conn-btn-ms365");
-                    if (data.graph) {
+                    if (data.graph === "connected") {
                         $ms365Status.textContent = "Connected";
                         $ms365Status.style.color = "var(--success)";
                         $ms365Btn.textContent = "Connected";
                         $ms365Btn.classList.add("connected");
                         $ms365Btn.disabled = true;
+                    } else if (data.graph === "configured") {
+                        $ms365Status.textContent = "Ready — click to sign in";
+                        $ms365Status.style.color = "var(--warning)";
+                        $ms365Btn.textContent = "Sign in";
+                        $ms365Btn.disabled = false;
                     }
 
                     var $searchStatus = document.getElementById("conn-status-search");
