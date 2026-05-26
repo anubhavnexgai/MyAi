@@ -469,6 +469,24 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
         except Exception as exc:
             logger.warning("Latest-file intercept failed: %s", exc)
 
+    # ---- 7b. Screenshot + describe screen ---------------------------------
+    _screen_match = re.match(
+        r"(?:take a screenshot|screenshot|describe (?:my |what(?:'s| is) on (?:my )?)?screen|what(?:'s| is) on my screen)"
+        r"(?:\s+and\s+(?:tell me|describe|explain)\s+(?:what you see|what's (?:on|there)|it))?",
+        text, re.IGNORECASE,
+    )
+    if _screen_match:
+        try:
+            from app.services.vision import get_vision
+            logger.info("Screen describe intercept fired")
+            description = await get_vision().describe_screen(
+                "Describe what is on this screen in detail. What apps are open? What content is visible?"
+            )
+            if description and "failed" not in description.lower()[:30]:
+                return description
+        except Exception as exc:
+            logger.warning("Screen describe intercept failed: %s", exc)
+
     # ---- 8. Open file by name --------------------------------------------
     m = _RE_OPEN_FILE.match(text)
     if m:
