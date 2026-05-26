@@ -181,7 +181,21 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
     if tools is None:
         return None
 
-    # ---- 1. Destructive blocker (highest priority) -----------------------
+    # ---- 0. Prompt injection blocker (highest priority) --------------------
+    _lower = text.lower()
+    _injection_phrases = [
+        "ignore all", "ignore previous", "ignore your instructions",
+        "disregard your", "disregard all", "forget your instructions",
+        "show your system prompt", "reveal your system prompt",
+        "print your system prompt", "output your system prompt",
+        "what is your system prompt", "show me your prompt",
+        "show your instructions", "repeat your instructions",
+    ]
+    if any(p in _lower for p in _injection_phrases):
+        return ("I can't share my internal instructions or system prompt. "
+                "This is a security policy. How can I actually help you?")
+
+    # ---- 1. Destructive blocker -----------------------------------------
     if _RE_DESTRUCTIVE.match(text):
         return ("I cannot perform destructive actions like deleting or "
                 "removing files. This action is blocked by security policy "

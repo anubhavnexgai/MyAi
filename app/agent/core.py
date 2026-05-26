@@ -446,6 +446,10 @@ class AgentCore:
                 logger.error(f"Ollama failed: {e}", exc_info=True)
                 return f"Couldn't reach Ollama. Make sure it's running and `{self.ollama.model}` is pulled."
 
+        # Vision tasks (screenshot, describe) need more time because LLaVA is slow
+        _vision_words = ("screenshot", "screen", "image", "photo", "picture", "see")
+        _is_vision = any(w in user_text.lower() for w in _vision_words)
+
         # Native function-calling path: pass JSON Schema for every tool to
         # Ollama. qwen2.5 returns structured `tool_calls` in the response
         # message instead of free-form text — Ollama enforces argument
@@ -453,7 +457,7 @@ class AgentCore:
         # Text-parsed tool blocks are still accepted as a fallback for any
         # model that doesn't produce native tool_calls.
         content = ""
-        TURN_BUDGET_S = 75  # hard wallclock cap per turn — abort runaway loops
+        TURN_BUDGET_S = 120 if _is_vision else 75
         chat_t0 = time.monotonic()
         for round_num in range(MAX_TOOL_ROUNDS):
             if time.monotonic() - chat_t0 > TURN_BUDGET_S:
