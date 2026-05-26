@@ -184,17 +184,45 @@
                                 </div>
                             </div>
 
-                            <div class="connector-card" data-connector="google">
+                            <div class="connector-card" data-connector="google-gmail">
                                 <div class="connector-icon-wrap google">
                                     <span class="material-symbols-outlined">mail</span>
                                 </div>
                                 <div class="connector-info">
-                                    <h4>Google Workspace</h4>
-                                    <p>Gmail, Google Calendar, Drive</p>
+                                    <h4>Gmail (MCP)</h4>
+                                    <p>Read, search, send emails via MCP server</p>
                                 </div>
                                 <div class="connector-action">
-                                    <span class="connector-status">Coming soon</span>
-                                    <button class="connector-btn" disabled>Connect</button>
+                                    <span class="connector-status" id="conn-status-gmail">Checking...</span>
+                                    <button class="connector-btn" id="conn-btn-gmail">Setup</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="google-calendar">
+                                <div class="connector-icon-wrap google">
+                                    <span class="material-symbols-outlined">event</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Google Calendar (MCP)</h4>
+                                    <p>View, create, manage calendar events</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-gcal">Checking...</span>
+                                    <button class="connector-btn" id="conn-btn-gcal">Setup</button>
+                                </div>
+                            </div>
+
+                            <div class="connector-card" data-connector="google-drive">
+                                <div class="connector-icon-wrap google">
+                                    <span class="material-symbols-outlined">folder</span>
+                                </div>
+                                <div class="connector-info">
+                                    <h4>Google Drive (MCP)</h4>
+                                    <p>List, read, search Drive files</p>
+                                </div>
+                                <div class="connector-action">
+                                    <span class="connector-status" id="conn-status-gdrive">Checking...</span>
+                                    <button class="connector-btn" id="conn-btn-gdrive">Setup</button>
                                 </div>
                             </div>
 

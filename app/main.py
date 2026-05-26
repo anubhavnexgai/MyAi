@@ -1584,6 +1584,14 @@ async def web_skills(req: web.Request) -> web.Response:
     return web.json_response({"skills": skills})
 
 
+async def mcp_servers_list(req: web.Request) -> web.Response:
+    """List configured MCP servers and their status."""
+    from app.services.mcp_client import get_mcp_client
+    client = get_mcp_client()
+    servers = client.list_servers()
+    return web.json_response({"servers": servers})
+
+
 async def web_index(req: web.Request) -> web.FileResponse:
     """Serve the Web UI index page."""
     return web.FileResponse(Path(__file__).parent.parent / "web" / "index.html")
@@ -1630,6 +1638,7 @@ def create_debug_app() -> web.Application:
     # Web UI API
     app.router.add_get("/api/web/status", web_status)
     app.router.add_get("/api/web/skills", web_skills)
+    app.router.add_get("/api/mcp/servers", mcp_servers_list)
 
     # Chat history API
     app.router.add_get("/api/chat/history", chat_history)

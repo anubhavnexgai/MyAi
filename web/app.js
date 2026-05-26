@@ -1799,7 +1799,20 @@
             }
         }
 
+        // MCP setup buttons
+        ["gmail", "gcal", "gdrive"].forEach(function (key) {
+            var btn = document.getElementById("conn-btn-" + key);
+            if (btn) {
+                btn.addEventListener("click", function () {
+                    $connModal.classList.add("hidden");
+                    var names = {gmail: "Gmail", gcal: "Google Calendar", gdrive: "Google Drive"};
+                    window._sendSuggestion("Help me set up " + names[key] + " MCP server integration. Give me step by step instructions.");
+                });
+            }
+        });
+
         function updateConnectorStatuses() {
+            // Check main status
             fetch("/api/web/status")
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
@@ -1830,6 +1843,38 @@
                         $searchBtn.textContent = "Enable";
                         $searchBtn.disabled = false;
                     }
+                })
+                .catch(function () {});
+
+            // Check MCP servers
+            fetch("/api/mcp/servers")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var mapping = {
+                        "google-gmail": "gmail",
+                        "google-calendar": "gcal",
+                        "google-drive": "gdrive",
+                    };
+                    (data.servers || []).forEach(function (srv) {
+                        var key = mapping[srv.name];
+                        if (!key) return;
+                        var $status = document.getElementById("conn-status-" + key);
+                        var $btn = document.getElementById("conn-btn-" + key);
+                        if (!$status || !$btn) return;
+                        if (srv.running) {
+                            $status.textContent = "Connected";
+                            $status.style.color = "var(--success)";
+                            $btn.textContent = "Connected";
+                            $btn.classList.add("connected");
+                            $btn.disabled = true;
+                        } else if (srv.available) {
+                            $status.textContent = "Ready — click to set up";
+                            $status.style.color = "var(--warning)";
+                        } else {
+                            $status.textContent = "Requires Node.js";
+                            $status.style.color = "var(--text-muted)";
+                        }
+                    });
                 })
                 .catch(function () {});
         }

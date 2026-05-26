@@ -1,3 +1,34 @@
 {
-  "servers": {}
+  "servers": {
+    "google-gmail": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-gmail"],
+      "transport": "stdio",
+      "description": "Gmail — read, search, send emails",
+      "setup_url": "https://github.com/anthropics/mcp-gmail",
+      "requires": "Google OAuth credentials in environment"
+    },
+    "google-calendar": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-google-calendar"],
+      "transport": "stdio",
+      "description": "Google Calendar — view, create, update events",
+      "setup_url": "https://github.com/anthropics/mcp-google-calendar",
+      "requires": "Google OAuth credentials in environment"
+    },
+    "google-drive": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-google-drive"],
+      "transport": "stdio",
+      "description": "Google Drive — list, read, search files",
+      "setup_url": "https://github.com/anthropics/mcp-google-drive",
+      "requires": "Google OAuth credentials in environment"
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-filesystem", "--root", "."],
+      "transport": "stdio",
+      "description": "Local filesystem access via MCP"
+    }
+  }
 }
