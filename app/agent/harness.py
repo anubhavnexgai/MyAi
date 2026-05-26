@@ -48,47 +48,57 @@ BUDGET_FORCE_ROUNDS: int = 8
 TASK_TYPES: Dict[str, Dict[str, Any]] = {
     "file_operation": {
         "keywords": [
-            "file", "read", "write", "save", "open", "create", "delete",
-            "folder", "directory", "path", "list", "move", "copy", "rename",
-            "csv", "pdf", "txt", "json", "document",
+            "file", "read file", "write file", "save file", "open file",
+            "create file", "delete file", "folder", "directory", "path",
+            "list files", "list directory", "move file", "copy file", "rename",
+            "csv", "pdf", "txt", "json", "document", "toml", "yaml",
         ],
-        "tools": ["read_file", "write_file", "list_directory", "search_files", "open_file"],
+        "tools": ["read_file", "write_file", "list_directory", "search_files", "open_file", "pdf_reader", "csv_reader"],
     },
     "web_search": {
         "keywords": [
-            "search", "google", "find online", "look up", "web", "internet",
+            "search the web", "search for", "search online", "google",
+            "find online", "look up online", "web search", "internet",
             "browse", "url", "website", "link", "news", "article",
         ],
         "tools": ["web_search", "browse_web", "url_summarizer", "open_url"],
     },
     "communication": {
         "keywords": [
-            "email", "send", "message", "whatsapp", "notify", "remind",
-            "contact", "mail", "text", "schedule", "meeting", "call",
+            "email", "send email", "send message", "whatsapp", "notify",
+            "remind me", "set reminder", "reminder", "contact", "mail",
+            "schedule meeting", "meeting", "call",
         ],
-        "tools": ["send_email", "send_whatsapp", "set_reminder", "clipboard_write"],
+        "tools": ["send_email", "send_whatsapp", "set_reminder"],
     },
     "system_action": {
         "keywords": [
-            "launch", "open app", "run", "execute", "system", "screenshot",
-            "screen", "type", "click", "clipboard", "copy", "paste",
-            "application", "program", "window", "git",
+            "launch", "open app", "run app", "execute", "system info",
+            "screenshot", "screen", "describe screen", "describe my screen",
+            "what's on my screen", "type in", "click", "clipboard",
+            "copy", "paste", "application", "program", "window",
+            "git status", "git", "cpu", "ram", "memory", "disk",
+            "battery", "usage", "uptime", "system",
         ],
-        "tools": ["app_launcher", "screenshot", "type_in_app", "clipboard_read", "system_info"],
+        "tools": ["app_launcher", "screenshot", "type_in_app", "clipboard_read",
+                  "clipboard_write", "system_info", "git_status", "describe_screen",
+                  "describe_image"],
     },
     "knowledge_query": {
         "keywords": [
-            "what is", "explain", "how", "why", "tell me", "describe",
-            "summarize", "knowledge", "information", "history", "definition",
-            "meaning", "difference", "compare",
+            "what is a", "what is the", "explain", "how does", "why does",
+            "tell me about", "summarize", "knowledge", "information",
+            "history of", "definition", "meaning of", "difference between",
+            "compare", "capital of", "who is", "when was",
         ],
-        "tools": ["rag_query", "web_search", "url_summarizer", "describe_image"],
+        "tools": ["rag_query", "web_search", "url_summarizer"],
     },
     "creative_writing": {
         "keywords": [
-            "write", "compose", "draft", "create content", "poem", "story",
-            "essay", "blog", "letter", "report", "generate text",
-            "rewrite", "improve", "edit text",
+            "write a poem", "write a story", "compose", "draft a letter",
+            "create content", "poem", "story", "essay", "blog post",
+            "letter", "report", "generate text", "rewrite", "improve text",
+            "haiku", "write me",
         ],
         "tools": ["rag_query", "write_file", "clipboard_write"],
     },
@@ -427,9 +437,22 @@ def extract_tool_call(raw_output: str, valid_names: Optional[List[str]] = None) 
             args = _kwargs_to_dict(raw_context) if raw_context else {}
             candidates.append(ToolCall(name=match[0], args=args, confidence=match[1] * 0.6))
 
+    # Strategy 7: Bare tool name in code block — ```tool_name``` with no JSON
+    _bare_block = re.search(r"```\s*(\w+)\s*```", raw_output)
+    if _bare_block:
+        match = _match_tool_name(_bare_block.group(1), valid_names)
+        if match:
+            candidates.append(ToolCall(name=match[0], args={}, confidence=match[1] * 0.7))
+
+    # Strategy 8: Bare tool name as entire response (model just outputs the tool name)
+    stripped = raw_output.strip().strip("`").strip()
+    if stripped and " " not in stripped and len(stripped) < 40:
+        match = _match_tool_name(stripped, valid_names)
+        if match and match[1] > 0.8:
+            candidates.append(ToolCall(name=match[0], args={}, confidence=match[1] * 0.65))
+
     if not candidates:
         return None
-    # Return highest confidence
     candidates.sort(key=lambda c: c.confidence, reverse=True)
     return candidates[0]
 
