@@ -41,39 +41,25 @@ A locally-running personal AI agent powered by **Ollama**. Runs entirely on your
 1. **Python 3.11+**
 2. **Ollama** — Install from [ollama.com](https://ollama.com)
 
-### Install & Run
+### One-Command Install
 
 ```bash
-# Clone
 git clone https://github.com/anubhavnexgai/MyAi.git
 cd MyAi
 
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # macOS/Linux
+# Windows:
+start.bat
 
-# Install
-pip install -e .
-
-# (Optional) Full features — WhatsApp, vision, browser, system info
-pip install -e ".[full]"
-
-# Run interactive setup
-python setup.py
-
-# Pull Ollama models
-ollama pull qwen2.5:7b
-ollama pull nomic-embed-text
-
-# Start Ollama (in a separate terminal)
-ollama serve
-
-# Run MyAi
-python -m app.main --web-only
+# macOS / Linux:
+chmod +x start.sh && ./start.sh
 ```
 
-Open **http://localhost:8001** for the Web UI.
+That's it. The script automatically:
+1. Checks Python & Ollama (prompts to install if missing)
+2. Creates virtual environment + installs dependencies
+3. Auto-detects your name from the OS and creates `.env`
+4. Starts Ollama and pulls required models (one-time ~5 GB download)
+5. Launches MyAi and opens **http://localhost:8001** in your browser
 
 ### First Login
 
