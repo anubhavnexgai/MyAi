@@ -492,14 +492,6 @@
     }
 
     function loadChatHistory(conversationId) {
-        if (!authToken) {
-            // No auth — show welcome on fresh start, skip history fetch
-            if (!conversationId) {
-                showWelcome();
-            }
-            return;
-        }
-
         var url;
         if (conversationId) {
             url = "/api/conversations/" + encodeURIComponent(conversationId) + "/history?limit=50";
@@ -1272,7 +1264,7 @@
     // -- Conversations management --
 
     function loadConversationsList() {
-        if (!authToken) return;
+        // Works with or without auth token (personal agent mode)
 
         fetch("/api/conversations", {
             headers: { "Authorization": "Bearer " + authToken },
@@ -1381,7 +1373,7 @@
     }
 
     function createNewConversation() {
-        if (!authToken) return;
+        // Works with or without auth token (personal agent mode)
 
         fetch("/api/conversations", {
             method: "POST",
@@ -1421,7 +1413,7 @@
 
     function deleteConversation(convId) {
         if (!confirm("Delete this conversation? This cannot be undone.")) return;
-        if (!authToken) return;
+        // Works with or without auth token (personal agent mode)
 
         fetch("/api/conversations/" + encodeURIComponent(convId), {
             method: "DELETE",

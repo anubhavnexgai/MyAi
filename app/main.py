@@ -489,13 +489,7 @@ async def auth_logout(req: web.Request) -> web.Response:
 async def auth_me(req: web.Request) -> web.Response:
     """Get current user from token."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         return web.json_response({"user": user.to_dict()})
     except Exception as e:
@@ -509,6 +503,39 @@ def _extract_token(req: web.Request) -> str | None:
     if auth_header.startswith("Bearer "):
         return auth_header[7:].strip()
     return req.query.get("token")
+
+
+# Default local user for no-auth mode (personal agent, no login required)
+_LOCAL_USER_ID = "local-user"
+_LOCAL_USER_NAME = settings.myai_user_name or "User"
+
+
+class _LocalUser:
+    """Fake user object for no-auth mode."""
+    def __init__(self):
+        self.id = _LOCAL_USER_ID
+        self.display_name = _LOCAL_USER_NAME
+        self.email = settings.myai_user_email or "user@localhost"
+        from app.auth.models import RoleLevel
+        self.role_level = RoleLevel.SUPER_ADMIN
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "display_name": self.display_name,
+            "email": self.email,
+            "role_level": self.role_level.value,
+        }
+
+
+async def _get_user_or_local(req: web.Request):
+    """Get authenticated user, or return default local user if no auth."""
+    token = _extract_token(req)
+    if token:
+        user = await auth_service.validate_session(token)
+        if user:
+            return user
+    return _LocalUser()
 
 
 # -- WebSocket chat handler (Web UI) --
@@ -1354,14 +1381,15 @@ async def whatsapp_webhook(req: web.Request) -> web.Response:
 
 async def microsoft_connect(req: web.Request) -> web.Response:
     """Redirect to Microsoft OAuth2 login page."""
-    token = req.query.get("token", "")
-    if not token:
-        return web.json_response({"error": "No token"}, status=401)
-    user = await auth_service.validate_session(token)
-    if not user:
-        return web.json_response({"error": "Invalid token"}, status=401)
+    user = await _get_user_or_local(req)
     if not graph_client.is_configured:
-        return web.Response(text="Microsoft 365 not configured", status=500)
+        return web.Response(
+            text="<html><body><h2>Microsoft 365 Not Configured</h2>"
+            "<p>Add GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET, and GRAPH_TENANT_ID to your .env file.</p>"
+            "<p><a href='/'>Back to MyAi</a></p></body></html>",
+            content_type="text/html",
+            status=500,
+        )
     auth_url = graph_client.get_auth_url(state=user.id)
     raise web.HTTPFound(location=auth_url)
 
@@ -1371,13 +1399,7 @@ async def microsoft_connect(req: web.Request) -> web.Response:
 async def chat_history(req: web.Request) -> web.Response:
     """Return chat history for the authenticated user."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         limit = int(req.query.get("limit", "50"))
         limit = max(1, min(limit, 200))  # clamp between 1 and 200
@@ -1392,12 +1414,7 @@ async def chat_history(req: web.Request) -> web.Response:
 async def list_conversations(req: web.Request) -> web.Response:
     """List all conversations for the authenticated user."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         conversations = await database.list_conversations(user.id)
         return web.json_response({"conversations": conversations})
@@ -1409,12 +1426,7 @@ async def list_conversations(req: web.Request) -> web.Response:
 async def create_conversation(req: web.Request) -> web.Response:
     """Create a new conversation for the authenticated user."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         title = ""
         try:
@@ -1433,12 +1445,7 @@ async def create_conversation(req: web.Request) -> web.Response:
 async def delete_conversation_endpoint(req: web.Request) -> web.Response:
     """Delete a conversation owned by the authenticated user."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         conv_id = req.match_info["id"]
         # Verify ownership
@@ -1456,12 +1463,7 @@ async def delete_conversation_endpoint(req: web.Request) -> web.Response:
 async def rename_conversation_endpoint(req: web.Request) -> web.Response:
     """Rename a conversation owned by the authenticated user."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         conv_id = req.match_info["id"]
         owner = await database.get_conversation_owner(conv_id)
@@ -1483,12 +1485,7 @@ async def rename_conversation_endpoint(req: web.Request) -> web.Response:
 async def conversation_history(req: web.Request) -> web.Response:
     """Return chat history for a specific conversation."""
     try:
-        token = _extract_token(req)
-        if not token:
-            return web.json_response({"error": "No token provided"}, status=401)
-        user = await auth_service.validate_session(token)
-        if not user:
-            return web.json_response({"error": "Invalid or expired token"}, status=401)
+        user = await _get_user_or_local(req)
 
         conv_id = req.match_info["id"]
         owner = await database.get_conversation_owner(conv_id)
