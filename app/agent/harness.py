@@ -727,12 +727,22 @@ class Harness:
             tools = get_tool_hints(self._current_task_type)
             parts.append(build_tool_hint_prompt(self._current_task_type, tools))
 
-        # H5: Cold-start skill (top-1)
+        # H5: Cold-start skill (top-1 from built-in library)
         if self.config.enable_skills:
             skills = retrieve_skills(user_message, self._current_task_type, top_k=1)
             skill_prompt = build_skill_prompt(skills)
             if skill_prompt:
                 parts.append(skill_prompt)
+
+            # H5+: Inject learned skills from auto-extraction (Hermes-style)
+            try:
+                from app.services.auto_skill import get_learned_skills
+                learned = get_learned_skills(user_message, top_k=1)
+                if learned:
+                    hints = [f"  - Learned pattern: {s['hint']}" for s in learned]
+                    parts.append("[Learned from previous sessions]\n" + "\n".join(hints))
+            except Exception:
+                pass
 
         if parts:
             injections["system_injection"] = "\n".join(parts)

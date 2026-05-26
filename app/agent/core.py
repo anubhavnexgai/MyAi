@@ -215,6 +215,14 @@ class AgentCore:
         except Exception as je:
             logger.warning(f"Journal append failed: {je}")
 
+        # Auto-skill extraction: learn reusable tool chains from successful turns
+        if tool_log and len(tool_log) >= 2:
+            try:
+                from app.services.auto_skill import try_extract_skill
+                try_extract_skill(user_text, tool_log, response)
+            except Exception as ae:
+                logger.debug(f"Auto-skill extraction skipped: {ae}")
+
         # Log usage event for analytics
         try:
             await self.db.log_usage_event(
