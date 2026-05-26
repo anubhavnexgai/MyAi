@@ -1,39 +1,37 @@
 """Context-aware suggestion engine for proactive MyAi UX.
 
-Generates 2-3 follow-up suggestion strings based on:
-  - The assistant's response text
-  - The tool(s) that were called
-  - The user's message
-
-Used by the WebSocket handler to append clickable suggestions after every response.
+Generates 2-3 follow-up suggestions that a real employee would actually
+use in their workday — not tech demos, but actionable next steps.
 """
 from __future__ import annotations
 
-import re
 from typing import List, Optional
 
 _SUGGESTIONS: list[tuple[list[str], list[str]]] = [
-    # (trigger keywords in response, suggestion texts)
-    (["file", "folder", "directory", ".py", ".md", ".pdf", ".txt", ".csv", ".docx"],
-     ["Open the latest file", "Search for a specific file", "Read this file"]),
-    (["code", "python", "function", "def ", "class ", "import ", "```"],
-     ["Explain this code", "Write tests for it", "Improve this code"]),
-    (["git", "branch", "commit", "modified", "staged", "ahead"],
-     ["Show the latest commit details", "List all changed files", "Check git log"]),
-    (["email", "outlook", "drafted", "sent", "mail"],
-     ["Send another email", "Check my inbox"]),
-    (["screenshot", "screen", ".png", "captured", "image"],
-     ["Describe what you see", "Take another screenshot"]),
-    (["search", "result", "found", "http", "www."],
-     ["Tell me more about the first result", "Search for something else"]),
-    (["reminder", "set for", "remind"],
-     ["Show all my reminders", "Set another reminder"]),
+    (["file", "folder", "directory", "download", "document", ".pdf", ".docx"],
+     ["Summarize this document", "Email it to my team", "Find related files"]),
+    (["code", "python", "function", "def ", "class ", "bug", "error", "fix"],
+     ["Explain this code", "Write tests for it", "Refactor it"]),
+    (["git", "branch", "commit", "modified", "staged", "push", "pull request"],
+     ["Draft a PR description", "Summarize changes for standup"]),
+    (["email", "outlook", "drafted", "sent", "mail", "draft"],
+     ["Draft another email", "Remind me to follow up in 1 hour"]),
+    (["search", "result", "found", "article", "news", "trend", "http"],
+     ["Summarize the key takeaways", "Draft a Slack message about this"]),
+    (["reminder", "set for", "remind", "alarm"],
+     ["What else do I need to do today?", "Set another reminder"]),
     (["cpu", "ram", "memory", "disk", "battery", "usage", "system"],
-     ["What processes are using the most resources?", "Check disk space"]),
-    (["clipboard", "copied", "pasted"],
-     ["Write it to a file", "Search the web for this"]),
-    (["launched", "opened", "notepad", "chrome", "calculator"],
-     ["Take a screenshot", "Type something in it"]),
+     ["Which apps are using the most resources?", "Free up some memory"]),
+    (["meeting", "agenda", "standup", "sprint", "review", "calendar"],
+     ["Draft meeting notes", "Send a follow-up email"]),
+    (["launched", "opened", "notepad", "chrome", "app"],
+     ["Help me draft something in it", "Take a screenshot"]),
+    (["hello", "hi", "hey", "good morning", "how can i help"],
+     ["Plan my day", "Catch me up on what I missed", "Draft a status update"]),
+    (["clipboard", "copied", "pasted", "link"],
+     ["Summarize this link", "Save it to a file"]),
+    (["screenshot", "screen", "image", "captured"],
+     ["Describe what's in it", "Share it with the team"]),
 ]
 
 
@@ -43,9 +41,8 @@ def get_suggestions(
     tool_names: Optional[List[str]] = None,
     max_suggestions: int = 3,
 ) -> List[str]:
-    """Return 2-3 contextual suggestion strings based on response content."""
     if not response_text:
-        return ["What can you do?", "Check system health"]
+        return ["Draft an email", "Help me plan my day"]
 
     resp_lower = response_text.lower()
     matched: List[str] = []
@@ -58,8 +55,7 @@ def get_suggestions(
                 if len(matched) >= max_suggestions:
                     return matched
 
-    # Fallback
     if not matched:
-        matched = ["Tell me more", "What else can you help with?"]
+        matched = ["Help me draft something", "What should I focus on today?"]
 
     return matched[:max_suggestions]

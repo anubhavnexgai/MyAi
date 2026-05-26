@@ -1111,31 +1111,37 @@
 
     // Return 2-3 contextual suggestion strings based on assistant response
     function getSuggestions(responseText) {
-        if (!responseText) return ["Tell me more", "What else can you do?"];
+        if (!responseText) return ["Draft an email", "Help me plan my day"];
         var t = responseText.toLowerCase();
 
         if (/\b(file|folder|directory|download|document)\b/.test(t)) {
-            return ["Open the latest one", "Search for a specific file"];
+            return ["Summarize this document", "Email it to my team"];
         }
-        if (/\b(code|python|javascript|function|class|def |import )\b/.test(t)) {
-            return ["Explain this code", "Find bugs in it"];
+        if (/\b(code|python|javascript|function|class|def |import |bug)\b/.test(t)) {
+            return ["Explain this code", "Write unit tests for it", "Refactor it"];
         }
-        if (/\b(git|branch|commit|merge|pull request)\b/.test(t)) {
-            return ["Show the latest commit", "List changed files"];
+        if (/\b(git|branch|commit|merge|pull request|push)\b/.test(t)) {
+            return ["Draft a PR description", "Summarize changes for standup"];
         }
-        if (/\b(email|sent|inbox|mail)\b/.test(t)) {
-            return ["Check my inbox", "Send another email"];
+        if (/\b(email|sent|draft|outlook|mail)\b/.test(t)) {
+            return ["Draft another email", "Remind me to follow up in 1 hour"];
         }
-        if (/\b(screenshot|screen|capture|display)\b/.test(t)) {
-            return ["Describe what you see", "Save it to desktop"];
+        if (/\b(search|results|article|news|trend)\b/.test(t)) {
+            return ["Summarize the key takeaways", "Draft a Slack message about this"];
         }
-        if (/\b(search results|results for|found .* results)\b/.test(t)) {
-            return ["Tell me more about the first result", "Search for something else"];
+        if (/\b(reminder|remind|alarm|set for)\b/.test(t)) {
+            return ["What else do I need to do today?", "Set another reminder"];
         }
-        if (/\b(reminder|remind|alarm|schedule)\b/.test(t)) {
-            return ["Show all my reminders", "Set another reminder"];
+        if (/\b(cpu|ram|memory|disk|system|battery|usage)\b/.test(t)) {
+            return ["Which apps are using the most resources?", "Free up some memory"];
         }
-        return ["Tell me more", "What else can you do?"];
+        if (/\b(meeting|agenda|standup|sprint|review)\b/.test(t)) {
+            return ["Draft meeting notes", "Send a follow-up email"];
+        }
+        if (/\b(hello|hi|hey|good morning|good afternoon|how can i)\b/.test(t)) {
+            return ["Plan my day", "Catch me up on what I missed", "Draft a status update"];
+        }
+        return ["Help me draft something", "What should I focus on today?"];
     }
 
     function markFeedbackSent(messageId, rating) {
@@ -1200,31 +1206,31 @@
         var greeting = getGreetingTime();
         $welcome.innerHTML =
             '<h2>Good ' + greeting + ', <span class="accent-word">' + escapeHtml(userName) + '</span></h2>' +
-            '<p>Your personal AI assistant. Ask anything or pick a quick action below.</p>' +
+            '<p>Your personal AI assistant. What would you like to get done?</p>' +
             '<div class="welcome-actions">' +
-                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'describe what is on my screen\')">' +
-                    '<span class="material-symbols-outlined">monitor</span>' +
-                    '<span class="welcome-action-label">What\'s on my screen?</span>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'draft a professional email to my manager with a quick status update on what I worked on this week\')">' +
+                    '<span class="material-symbols-outlined">mail</span>' +
+                    '<span class="welcome-action-label">Draft a status update email</span>' +
                 '</button>' +
-                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'what is my CPU and RAM usage?\')">' +
-                    '<span class="material-symbols-outlined">health_and_safety</span>' +
-                    '<span class="welcome-action-label">Check system health</span>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'summarize the key points I need to prepare for my next meeting\')">' +
+                    '<span class="material-symbols-outlined">event_note</span>' +
+                    '<span class="welcome-action-label">Prep for my next meeting</span>' +
                 '</button>' +
-                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'list the latest files in my downloads folder\')">' +
-                    '<span class="material-symbols-outlined">download</span>' +
-                    '<span class="welcome-action-label">Latest downloads</span>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'search the web for the latest trends in AI agents and enterprise copilots\')">' +
+                    '<span class="material-symbols-outlined">trending_up</span>' +
+                    '<span class="welcome-action-label">Latest AI industry trends</span>' +
                 '</button>' +
-                '<button class="welcome-action-card" onclick="window._prefillSearch()">' +
-                    '<span class="material-symbols-outlined">travel_explore</span>' +
-                    '<span class="welcome-action-label">Search the web</span>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'help me write a clear and concise PRD outline for a new feature\')">' +
+                    '<span class="material-symbols-outlined">description</span>' +
+                    '<span class="welcome-action-label">Write a PRD outline</span>' +
                 '</button>' +
-                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'take a screenshot\')">' +
-                    '<span class="material-symbols-outlined">screenshot_monitor</span>' +
-                    '<span class="welcome-action-label">Take a screenshot</span>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'remind me in 30 minutes to follow up on the pending code review\')">' +
+                    '<span class="material-symbols-outlined">alarm</span>' +
+                    '<span class="welcome-action-label">Set a work reminder</span>' +
                 '</button>' +
-                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'show me the git status of my project\')">' +
-                    '<span class="material-symbols-outlined">code</span>' +
-                    '<span class="welcome-action-label">Project status</span>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'list the files I downloaded recently and tell me which ones look important\')">' +
+                    '<span class="material-symbols-outlined">folder_open</span>' +
+                    '<span class="welcome-action-label">Review recent downloads</span>' +
                 '</button>' +
             '</div>';
         $messages.appendChild($welcome);
