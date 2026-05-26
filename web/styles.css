@@ -2465,3 +2465,117 @@ input:focus:not(:focus-visible),
 textarea:focus:not(:focus-visible) {
     outline: none;
 }
+
+/* ============================================
+   WELCOME QUICK-ACTION CARDS
+   ============================================ */
+
+.welcome-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    max-width: 600px;
+    margin: 32px auto 0;
+}
+
+@media (max-width: 640px) {
+    .welcome-actions {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+}
+
+@media (max-width: 380px) {
+    .welcome-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+.welcome-action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 22px 14px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 12px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.welcome-action-card:hover {
+    background: var(--bg-glass-strong);
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md), 0 0 30px rgba(129, 140, 248, 0.08);
+}
+
+.welcome-action-card:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.welcome-action-card .material-symbols-outlined {
+    font-size: 28px;
+    color: var(--accent);
+    transition: color var(--transition-fast);
+}
+
+.welcome-action-card:hover .material-symbols-outlined {
+    color: var(--accent-hover);
+}
+
+.welcome-action-label {
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0.2px;
+}
+
+/* ============================================
+   SUGGESTION CHIPS (after assistant messages)
+   ============================================ */
+
+.suggestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-self: flex-start;
+    max-width: 82%;
+    animation: msgAppear 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.suggestion-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 16px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.suggestion-chip:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 12px rgba(129, 140, 248, 0.12);
+}
+
+.suggestion-chip:active {
+    transform: translateY(0) scale(0.97);
+}

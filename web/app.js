@@ -662,7 +662,7 @@
             case "response":
                 hideTyping();
                 var msgText = data.text;
-                addMessage("assistant", msgText, data.agent, data.message_id, data.conversation_id, data.source);
+                addMessage("assistant", msgText, data.agent, data.message_id, data.conversation_id, data.source, data.suggestions);
                 // Track active conversation from server response
                 if (data.conversation_id && !activeConversationId) {
                     activeConversationId = data.conversation_id;
@@ -1012,7 +1012,7 @@
     })();
 
     // -- UI rendering --
-    function addMessage(role, text, agent, messageId, conversationId, source) {
+    function addMessage(role, text, agent, messageId, conversationId, source, serverSuggestions) {
         var $msg = document.createElement("div");
         $msg.className = "message " + role;
 
@@ -1040,6 +1040,27 @@
 
         $msg.innerHTML = html;
         $messages.appendChild($msg);
+
+        // Add suggestion chips after assistant messages (prefer server suggestions)
+        if (role === "assistant" && text) {
+            var suggestions = (serverSuggestions && serverSuggestions.length) ? serverSuggestions : getSuggestions(text);
+            if (suggestions && suggestions.length) {
+                var $chips = document.createElement("div");
+                $chips.className = "suggestion-chips";
+                for (var si = 0; si < suggestions.length; si++) {
+                    var $chip = document.createElement("button");
+                    $chip.className = "suggestion-chip";
+                    $chip.textContent = suggestions[si];
+                    $chip.setAttribute("data-suggestion", suggestions[si]);
+                    $chip.onclick = (function (txt) {
+                        return function () { window._sendSuggestion(txt); };
+                    })(suggestions[si]);
+                    $chips.appendChild($chip);
+                }
+                $messages.appendChild($chips);
+            }
+        }
+
         scrollToBottom();
     }
 
@@ -1070,6 +1091,52 @@
         }
         btnEl.classList.add("feedback-selected");
     };
+
+    // Suggestion handler (exposed globally for onclick)
+    window._sendSuggestion = function (text) {
+        if (!text) return;
+        removeWelcome();
+        $input.value = text;
+        doSend();
+    };
+
+    // Pre-fill "search the web for " and focus input
+    window._prefillSearch = function () {
+        $input.value = "search the web for ";
+        $input.focus();
+        // Place cursor at end
+        var len = $input.value.length;
+        $input.setSelectionRange(len, len);
+    };
+
+    // Return 2-3 contextual suggestion strings based on assistant response
+    function getSuggestions(responseText) {
+        if (!responseText) return ["Tell me more", "What else can you do?"];
+        var t = responseText.toLowerCase();
+
+        if (/\b(file|folder|directory|download|document)\b/.test(t)) {
+            return ["Open the latest one", "Search for a specific file"];
+        }
+        if (/\b(code|python|javascript|function|class|def |import )\b/.test(t)) {
+            return ["Explain this code", "Find bugs in it"];
+        }
+        if (/\b(git|branch|commit|merge|pull request)\b/.test(t)) {
+            return ["Show the latest commit", "List changed files"];
+        }
+        if (/\b(email|sent|inbox|mail)\b/.test(t)) {
+            return ["Check my inbox", "Send another email"];
+        }
+        if (/\b(screenshot|screen|capture|display)\b/.test(t)) {
+            return ["Describe what you see", "Save it to desktop"];
+        }
+        if (/\b(search results|results for|found .* results)\b/.test(t)) {
+            return ["Tell me more about the first result", "Search for something else"];
+        }
+        if (/\b(reminder|remind|alarm|schedule)\b/.test(t)) {
+            return ["Show all my reminders", "Set another reminder"];
+        }
+        return ["Tell me more", "What else can you do?"];
+    }
 
     function markFeedbackSent(messageId, rating) {
         var $msg = document.querySelector('.message[data-message-id="' + messageId + '"]');
@@ -1118,15 +1185,48 @@
         scrollToBottom();
     }
 
+    function getGreetingTime() {
+        var h = new Date().getHours();
+        if (h < 12) return "morning";
+        if (h < 17) return "afternoon";
+        return "evening";
+    }
+
     function showWelcome() {
         var $welcome = document.createElement("div");
         $welcome.className = "welcome";
         $welcome.id = "welcome";
         var userName = (currentUser && currentUser.display_name) ? currentUser.display_name : "there";
+        var greeting = getGreetingTime();
         $welcome.innerHTML =
-            '<h2>Welcome, <span class="accent-word">' + escapeHtml(userName) + '</span></h2>' +
-            '<p>Your personal AI assistant. Ask anything, use commands like <code>/help</code>, ' +
-            'or let the enterprise skills handle your requests automatically.</p>';
+            '<h2>Good ' + greeting + ', <span class="accent-word">' + escapeHtml(userName) + '</span></h2>' +
+            '<p>Your personal AI assistant. Ask anything or pick a quick action below.</p>' +
+            '<div class="welcome-actions">' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'describe what is on my screen\')">' +
+                    '<span class="material-symbols-outlined">monitor</span>' +
+                    '<span class="welcome-action-label">What\'s on my screen?</span>' +
+                '</button>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'what is my CPU and RAM usage?\')">' +
+                    '<span class="material-symbols-outlined">health_and_safety</span>' +
+                    '<span class="welcome-action-label">Check system health</span>' +
+                '</button>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'list the latest files in my downloads folder\')">' +
+                    '<span class="material-symbols-outlined">download</span>' +
+                    '<span class="welcome-action-label">Latest downloads</span>' +
+                '</button>' +
+                '<button class="welcome-action-card" onclick="window._prefillSearch()">' +
+                    '<span class="material-symbols-outlined">travel_explore</span>' +
+                    '<span class="welcome-action-label">Search the web</span>' +
+                '</button>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'take a screenshot\')">' +
+                    '<span class="material-symbols-outlined">screenshot_monitor</span>' +
+                    '<span class="welcome-action-label">Take a screenshot</span>' +
+                '</button>' +
+                '<button class="welcome-action-card" onclick="window._sendSuggestion(\'show me the git status of my project\')">' +
+                    '<span class="material-symbols-outlined">code</span>' +
+                    '<span class="welcome-action-label">Project status</span>' +
+                '</button>' +
+            '</div>';
         $messages.appendChild($welcome);
     }
 

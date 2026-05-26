@@ -759,9 +759,11 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                                         "connect_url": f"/auth/microsoft?token={token_val}",
                                     })
                                     continue
+                                from app.services.suggestions import get_suggestions as _gs
                                 await ws.send_json({
                                     "type": "response",
                                     "text": response,
+                                    "suggestions": _gs(response, text),
                                 })
                                 continue
 
@@ -801,6 +803,7 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                                 await ws.send_json({
                                     "type": "response",
                                     "text": f"Reminder set for {_due.strftime('%I:%M %p')}: {_rem_msg}",
+                                    "suggestions": ["Show all my reminders", "Set another reminder"],
                                 })
                                 _handled = True
 
@@ -1084,6 +1087,9 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                                 user_id, text, user_name, user=auth_user,
                                 conversation_id=active_conversation_id,
                             )
+                            # Generate contextual suggestions for proactive UX
+                            from app.services.suggestions import get_suggestions
+                            suggestions = get_suggestions(result["text"], text)
                             await ws.send_json({
                                 "type": "response",
                                 "text": result["text"],
@@ -1091,6 +1097,7 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                                 "conversation_id": result["conversation_id"],
                                 "agent": result["agent_name"],
                                 "source": result["source"],
+                                "suggestions": suggestions,
                             })
                     except Exception as e:
                         logger.error(f"WebSocket message error: {e}", exc_info=True)
