@@ -437,12 +437,15 @@ def extract_tool_call(raw_output: str, valid_names: Optional[List[str]] = None) 
             args = _kwargs_to_dict(raw_context) if raw_context else {}
             candidates.append(ToolCall(name=match[0], args=args, confidence=match[1] * 0.6))
 
-    # Strategy 7: Bare tool name in code block — ```tool_name``` with no JSON
-    _bare_block = re.search(r"```\s*(\w+)\s*```", raw_output)
+    # Strategy 7: Bare tool name in code block — ```tool_name``` or ```tool_name {}```
+    _bare_block = re.search(r"```\s*(\w+)\s*(\{[^`]*\})?\s*```", raw_output)
     if _bare_block:
-        match = _match_tool_name(_bare_block.group(1), valid_names)
+        raw_name = _bare_block.group(1)
+        raw_args_str = _bare_block.group(2) or ""
+        match = _match_tool_name(raw_name, valid_names)
         if match:
-            candidates.append(ToolCall(name=match[0], args={}, confidence=match[1] * 0.7))
+            args = _parse_json_obj(raw_args_str) if raw_args_str.strip() else {}
+            candidates.append(ToolCall(name=match[0], args=args or {}, confidence=match[1] * 0.7))
 
     # Strategy 8: Bare tool name as entire response (model just outputs the tool name)
     stripped = raw_output.strip().strip("`").strip()
