@@ -126,7 +126,10 @@ class ToolRegistry:
                 )
 
         # 3. Policy: approval required (or critic forced it)
-        if policy.is_approval_required(tool_name) or critic_objection is not None:
+        # Auto-skip approval for autonomous goals — user already consented by starting the goal
+        if actor == "autonomy":
+            pass  # skip approval, go straight to execution
+        elif policy.is_approval_required(tool_name) or critic_objection is not None:
             approval = get_approval()
             action_id = approval.queue(
                 tool=tool_name,

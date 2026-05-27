@@ -514,6 +514,34 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
         except Exception as exc:
             logger.warning("Latest-file intercept failed: %s", exc)
 
+    # ---- 6c. Goal progress check — "progress?", "how's the goal?", "status?" ---
+    _progress_match = re.match(
+        r"(?:progress|status|how(?:'s| is) (?:the |my )?goal|what(?:'s| is) the (?:progress|status)|goal status|check (?:the )?goal)",
+        text, re.IGNORECASE,
+    )
+    if _progress_match:
+        try:
+            from app.services.autonomy import get_autonomy
+            autonomy = get_autonomy(tools=tools)
+            goals = autonomy.list_goals(limit=1)
+            if goals:
+                latest = goals[0]
+                st = autonomy.status(latest["id"])
+                g = st["goal"]
+                steps = st["steps"]
+                lines = [f"**Goal #{g['id']}** [{g['status']}]: {g['goal']}"]
+                if g.get("summary"):
+                    lines.append(f"Summary: {g['summary']}")
+                for s in steps:
+                    mark = {"done": "done", "failed": "FAIL", "running": "running",
+                            "pending": "pending", "skipped": "skipped"}.get(s["status"], "?")
+                    lines.append(f"  [{mark}] {s['description']}")
+                return "\n".join(lines)
+            else:
+                return "No goals have been started yet. Tell me what you'd like me to work on!"
+        except Exception as exc:
+            logger.warning("Goal progress intercept failed: %s", exc)
+
     # ---- 7a. Background/overnight task — start_goal -----------------------
     m = _RE_BACKGROUND_TASK.match(text)
     if m:
