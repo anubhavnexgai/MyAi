@@ -127,10 +127,18 @@
 
     // New sidebar button refs
     const $btnNewChat = document.getElementById("btn-new-chat");
+    const $btnTasks = document.getElementById("btn-tasks");
     const $btnSettings = document.getElementById("btn-settings");
     const $btnStatusToggle = document.getElementById("btn-status-toggle");
     const $statusPanel = document.getElementById("status-panel");
     const $recentChats = document.getElementById("recent-chats");
+
+    // Tasks panel refs
+    const $tasksPanel = document.getElementById("tasks-panel");
+    const $tasksGrid = document.getElementById("tasks-grid");
+    const $tasksEmpty = document.getElementById("tasks-empty");
+    const $tasksClose = document.getElementById("tasks-close");
+    let _tasksRefreshInterval = null;
 
     // -- Init --
     function init() {
@@ -1357,6 +1365,20 @@
     function switchToConversation(convId) {
         if (convId === activeConversationId) return;
 
+        // Close tasks panel if open
+        if ($tasksPanel && !$tasksPanel.classList.contains("hidden")) {
+            $tasksPanel.classList.add("hidden");
+            $chatArea.classList.remove("hidden");
+            if (_tasksRefreshInterval) {
+                clearInterval(_tasksRefreshInterval);
+                _tasksRefreshInterval = null;
+            }
+            document.querySelectorAll(".nav-btn").forEach(function (b) {
+                b.classList.remove("nav-btn-active");
+            });
+            $btnNewChat.classList.add("nav-btn-active");
+        }
+
         activeConversationId = convId;
 
         // Tell the server to switch
@@ -1706,7 +1728,13 @@
 
         // New Chat button creates a new conversation
         if ($btnNewChat) {
-            $btnNewChat.addEventListener("click", createNewConversation);
+            $btnNewChat.addEventListener("click", function () {
+                // Close tasks panel if open
+                if ($tasksPanel && !$tasksPanel.classList.contains("hidden")) {
+                    closeTasksPanel();
+                }
+                createNewConversation();
+            });
         }
 
         // Settings button opens modal
@@ -1813,6 +1841,233 @@
                 });
             }
         });
+
+        // ── Tasks panel ──
+        if ($btnTasks && $tasksPanel) {
+            $btnTasks.addEventListener("click", function () {
+                openTasksPanel();
+            });
+
+            $tasksClose.addEventListener("click", function () {
+                closeTasksPanel();
+            });
+
+            // Sidebar toggle inside tasks header
+            var $toggleSidebarTasks = document.getElementById("btn-toggle-sidebar-tasks");
+            if ($toggleSidebarTasks) {
+                $toggleSidebarTasks.addEventListener("click", function () {
+                    $sidebar.classList.toggle("collapsed");
+                });
+            }
+        }
+
+        function openTasksPanel() {
+            $chatArea.classList.add("hidden");
+            $tasksPanel.classList.remove("hidden");
+
+            // Update nav button active states
+            document.querySelectorAll(".nav-btn").forEach(function (b) {
+                b.classList.remove("nav-btn-active");
+            });
+            $btnTasks.classList.add("nav-btn-active");
+
+            fetchTasks();
+            // Auto-refresh every 10 seconds
+            if (_tasksRefreshInterval) clearInterval(_tasksRefreshInterval);
+            _tasksRefreshInterval = setInterval(fetchTasks, 10000);
+        }
+
+        function closeTasksPanel() {
+            $tasksPanel.classList.add("hidden");
+            $chatArea.classList.remove("hidden");
+
+            // Restore nav button active states
+            document.querySelectorAll(".nav-btn").forEach(function (b) {
+                b.classList.remove("nav-btn-active");
+            });
+            $btnNewChat.classList.add("nav-btn-active");
+
+            // Stop auto-refresh
+            if (_tasksRefreshInterval) {
+                clearInterval(_tasksRefreshInterval);
+                _tasksRefreshInterval = null;
+            }
+        }
+
+        function fetchTasks() {
+            fetch("/api/tasks")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    renderTasks(data.tasks || []);
+                })
+                .catch(function (err) {
+                    console.error("Failed to fetch tasks:", err);
+                });
+        }
+
+        function renderTasks(tasks) {
+            if (!tasks.length) {
+                $tasksGrid.classList.add("hidden");
+                $tasksEmpty.classList.remove("hidden");
+                return;
+            }
+            $tasksGrid.classList.remove("hidden");
+            $tasksEmpty.classList.add("hidden");
+
+            // Preserve expanded state
+            var expandedIds = {};
+            $tasksGrid.querySelectorAll(".task-card.expanded").forEach(function (el) {
+                expandedIds[el.dataset.id] = true;
+            });
+
+            $tasksGrid.innerHTML = "";
+            tasks.forEach(function (task) {
+                var card = buildTaskCard(task);
+                if (expandedIds[task.id]) card.classList.add("expanded");
+                $tasksGrid.appendChild(card);
+            });
+        }
+
+        function buildTaskCard(task) {
+            var card = document.createElement("div");
+            card.className = "task-card";
+            card.dataset.status = task.status;
+            card.dataset.id = task.id;
+
+            var steps = task.steps || [];
+            var doneSteps = steps.filter(function (s) { return s.status === "done"; }).length;
+            var totalSteps = steps.length;
+            var pct = totalSteps > 0 ? Math.round((doneSteps / totalSteps) * 100) : 0;
+
+            var statusLabel = {
+                done: "Completed", running: "Running", failed: "Failed",
+                pending: "Pending", cancelled: "Cancelled"
+            }[task.status] || task.status;
+
+            var statusIcon = {
+                done: "check_circle", running: "sync", failed: "error",
+                pending: "schedule", cancelled: "cancel"
+            }[task.status] || "help";
+
+            // Format created time
+            var createdStr = "";
+            if (task.created) {
+                try {
+                    var d = new Date(task.created);
+                    createdStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+                        " at " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                } catch (e) {
+                    createdStr = task.created;
+                }
+            }
+
+            var summaryHtml = "";
+            if (task.summary && (task.status === "done" || task.status === "failed")) {
+                summaryHtml = '<div class="task-summary">' + escapeHtmlStr(task.summary) + '</div>';
+            }
+
+            var stepsHtml = "";
+            if (steps.length) {
+                var stepItems = steps.map(function (s) {
+                    var stepStatusClass = "step-" + (s.status || "pending");
+                    var stepIcon = {
+                        done: "check", running: "sync", failed: "close",
+                        pending: "radio_button_unchecked", skipped: "remove"
+                    }[s.status] || "radio_button_unchecked";
+
+                    var resultHtml = "";
+                    if (s.result && s.status !== "pending") {
+                        var truncated = s.result.length > 200 ? s.result.substring(0, 200) + "..." : s.result;
+                        resultHtml = '<div class="task-step-result">' + escapeHtmlStr(truncated) + '</div>';
+                    }
+
+                    var toolHtml = "";
+                    if (s.tool) {
+                        toolHtml = '<div class="task-step-tool">' + escapeHtmlStr(s.tool) + '</div>';
+                    }
+
+                    return '<div class="task-step">' +
+                        '<div class="task-step-icon ' + stepStatusClass + '">' +
+                            '<span class="material-symbols-outlined">' + stepIcon + '</span>' +
+                        '</div>' +
+                        '<div class="task-step-content">' +
+                            '<div class="task-step-desc">' + escapeHtmlStr(s.description || "") + '</div>' +
+                            toolHtml + resultHtml +
+                        '</div>' +
+                    '</div>';
+                }).join("");
+
+                stepsHtml = '<div class="task-steps"><div class="task-steps-list">' + stepItems + '</div></div>';
+            }
+
+            var expandHint = steps.length > 0 ? '<div class="task-expand-hint">Click to ' + (card.classList.contains("expanded") ? 'collapse' : 'expand') + ' steps</div>' : '';
+
+            card.innerHTML =
+                '<div class="task-card-top">' +
+                    '<span class="task-status-badge status-' + task.status + '">' +
+                        '<span class="task-status-dot"></span>' +
+                        statusLabel +
+                    '</span>' +
+                    '<button class="task-delete-btn" title="Cancel task" data-task-id="' + task.id + '">' +
+                        '<span class="material-symbols-outlined">delete</span>' +
+                    '</button>' +
+                '</div>' +
+                '<div class="task-goal">' + escapeHtmlStr(task.goal || "") + '</div>' +
+                '<div class="task-meta">' +
+                    '<span><span class="material-symbols-outlined">schedule</span> ' + escapeHtmlStr(createdStr) + '</span>' +
+                    (task.persona && task.persona !== "default" ? '<span><span class="material-symbols-outlined">person</span> ' + escapeHtmlStr(task.persona) + '</span>' : '') +
+                '</div>' +
+                summaryHtml +
+                (totalSteps > 0 ? (
+                    '<div class="task-progress">' +
+                        '<div class="task-progress-bar"><div class="task-progress-fill" style="width:' + pct + '%"></div></div>' +
+                        '<span class="task-progress-text">' + doneSteps + '/' + totalSteps + ' steps</span>' +
+                    '</div>'
+                ) : '') +
+                expandHint +
+                stepsHtml;
+
+            // Toggle expand/collapse on click
+            card.addEventListener("click", function (e) {
+                // Don't toggle if clicking the delete button
+                if (e.target.closest(".task-delete-btn")) return;
+                card.classList.toggle("expanded");
+                var hint = card.querySelector(".task-expand-hint");
+                if (hint) {
+                    hint.textContent = card.classList.contains("expanded") ? "Click to collapse" : "Click to expand steps";
+                }
+            });
+
+            // Delete button handler
+            var deleteBtn = card.querySelector(".task-delete-btn");
+            if (deleteBtn) {
+                deleteBtn.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    var taskId = this.dataset.taskId;
+                    if (!confirm("Cancel this task?")) return;
+                    fetch("/api/tasks/" + taskId, { method: "DELETE" })
+                        .then(function (r) { return r.json(); })
+                        .then(function () {
+                            card.style.opacity = "0";
+                            card.style.transform = "scale(0.95)";
+                            card.style.transition = "all 0.3s ease";
+                            setTimeout(function () {
+                                card.remove();
+                                // Check if grid is now empty
+                                if ($tasksGrid.children.length === 0) {
+                                    $tasksGrid.classList.add("hidden");
+                                    $tasksEmpty.classList.remove("hidden");
+                                }
+                            }, 300);
+                        })
+                        .catch(function (err) {
+                            console.error("Failed to cancel task:", err);
+                        });
+                });
+            }
+
+            return card;
+        }
 
         function updateConnectorStatuses() {
             // Check main status

@@ -149,6 +149,10 @@
                     <span class="material-symbols-outlined nav-icon">add_comment</span>
                     <span class="nav-label">New Chat</span>
                 </button>
+                <button id="btn-tasks" class="nav-btn">
+                    <span class="material-symbols-outlined nav-icon">task_alt</span>
+                    <span class="nav-label">Tasks</span>
+                </button>
                 <button id="btn-connectors" class="nav-btn">
                     <span class="material-symbols-outlined nav-icon">cable</span>
                     <span class="nav-label">Connectors</span>
@@ -438,6 +442,29 @@
                 </div>
             </div>
         </main>
+
+        <!-- Tasks Panel -->
+        <div id="tasks-panel" class="tasks-panel hidden">
+            <div class="tasks-header">
+                <div class="tasks-header-left">
+                    <button id="btn-toggle-sidebar-tasks" class="icon-btn" title="Toggle sidebar">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
+                    <h2>Background Tasks</h2>
+                </div>
+                <button id="tasks-close" class="icon-btn" title="Back to chat">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div id="tasks-grid" class="tasks-grid">
+                <!-- Cards inserted by JS -->
+            </div>
+            <div id="tasks-empty" class="tasks-empty hidden">
+                <span class="material-symbols-outlined" style="font-size:48px;color:var(--text-muted)">task_alt</span>
+                <p>No tasks yet. Ask MyAi to work on something in the background!</p>
+                <p class="tasks-empty-hint">Try: "research X overnight" or "analyze Y while I'm away"</p>
+            </div>
+        </div>
 
         <!-- Settings Modal -->
         <div id="settings-modal" class="modal hidden">

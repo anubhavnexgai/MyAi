@@ -1593,6 +1593,77 @@ async def mcp_servers_list(req: web.Request) -> web.Response:
     return web.json_response({"servers": servers})
 
 
+async def tasks_list(req: web.Request) -> web.Response:
+    """List all background tasks (goals), most recent first."""
+    try:
+        from app.services.autonomy import get_autonomy
+        svc = get_autonomy()
+        limit = int(req.query.get("limit", "50"))
+        goals = svc.list_goals(limit=limit)
+        tasks = []
+        for g in goals:
+            info = svc.status(g["id"])
+            tasks.append({
+                "id": g["id"],
+                "goal": g["goal"],
+                "status": g["status"],
+                "created": g["ts"],
+                "completed_at": g.get("completed_at"),
+                "summary": g.get("summary"),
+                "persona": g.get("persona"),
+                "steps": info.get("steps", []),
+            })
+        return web.json_response({"tasks": tasks})
+    except RuntimeError:
+        # AutonomyService not initialised — no goals yet
+        return web.json_response({"tasks": []})
+    except Exception as e:
+        logger.error(f"Tasks list error: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def tasks_get(req: web.Request) -> web.Response:
+    """Get a single task (goal) with its steps."""
+    try:
+        from app.services.autonomy import get_autonomy
+        svc = get_autonomy()
+        goal_id = int(req.match_info["id"])
+        info = svc.status(goal_id)
+        if "error" in info:
+            return web.json_response({"error": info["error"]}, status=404)
+        goal = info["goal"]
+        return web.json_response({
+            "id": goal["id"],
+            "goal": goal["goal"],
+            "status": goal["status"],
+            "created": goal["ts"],
+            "completed_at": goal.get("completed_at"),
+            "summary": goal.get("summary"),
+            "persona": goal.get("persona"),
+            "steps": info.get("steps", []),
+        })
+    except RuntimeError:
+        return web.json_response({"error": "No tasks available"}, status=404)
+    except Exception as e:
+        logger.error(f"Task get error: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def tasks_cancel(req: web.Request) -> web.Response:
+    """Cancel a running task (goal)."""
+    try:
+        from app.services.autonomy import get_autonomy
+        svc = get_autonomy()
+        goal_id = int(req.match_info["id"])
+        ok = svc.cancel(goal_id)
+        return web.json_response({"status": "cancelled" if ok else "not_found"})
+    except RuntimeError:
+        return web.json_response({"error": "No tasks available"}, status=404)
+    except Exception as e:
+        logger.error(f"Task cancel error: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def web_index(req: web.Request) -> web.FileResponse:
     """Serve the Web UI index page."""
     return web.FileResponse(Path(__file__).parent.parent / "web" / "index.html")
@@ -1640,6 +1711,11 @@ def create_debug_app() -> web.Application:
     app.router.add_get("/api/web/status", web_status)
     app.router.add_get("/api/web/skills", web_skills)
     app.router.add_get("/api/mcp/servers", mcp_servers_list)
+
+    # Tasks (background goals) API
+    app.router.add_get("/api/tasks", tasks_list)
+    app.router.add_get("/api/tasks/{id}", tasks_get)
+    app.router.add_delete("/api/tasks/{id}", tasks_cancel)
 
     # Chat history API
     app.router.add_get("/api/chat/history", chat_history)

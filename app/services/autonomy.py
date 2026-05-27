@@ -329,12 +329,11 @@ _singleton: AutonomyService | None = None
 
 
 def get_autonomy(tools=None) -> AutonomyService:
-    """Get or initialise the singleton. Tools must be passed on first call."""
+    """Get or initialise the singleton. Tools are only needed for execution, not read-only access."""
     global _singleton
     if _singleton is None:
-        if tools is None:
-            raise RuntimeError(
-                "AutonomyService not yet initialised — pass `tools=` on first call"
-            )
         _singleton = AutonomyService(tools=tools)
+    elif tools is not None and _singleton.tools is None:
+        _singleton.tools = tools
+        _singleton.planner = Planner(_singleton.ollama)
     return _singleton
