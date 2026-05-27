@@ -148,6 +148,23 @@ _RE_READ_AND_DO = re.compile(
     re.IGNORECASE,
 )
 
+_RE_READ_SIMPLE = re.compile(
+    r"(?:read|show me|cat|display|print)\s+"
+    r"(?:the\s+|my\s+|the\s+file\s+)?(?:file\s+)?"
+    r"(\S+(?:\.\w+)?)"
+    r"(?:\s+(?:and\s+)?(?:tell me|explain|summarize|describe)(?:\s+.+)?)?$",
+    re.IGNORECASE,
+)
+
+_RE_BACKGROUND_TASK = re.compile(
+    r"(?:work on|do|handle|complete|finish|build|implement|fix|research|analyze|prepare|create)\s+"
+    r"(.+?)"
+    r"(?:\s+(?:overnight|in the background|while I(?:'m| am) (?:away|sleeping|gone)|"
+    r"and (?:let me know|tell me|report back) when (?:it'?s |you(?:'re| are) )?done|"
+    r"autonomously|on your own|by yourself|without me))",
+    re.IGNORECASE | re.DOTALL,
+)
+
 _RE_OPEN_FILE = re.compile(
     r"(?:open|show|view)\s+(?:the\s+|my\s+|this\s+)?(?:file\s+)?(.+?)(?:\s+file)?$",
     re.IGNORECASE,
@@ -349,6 +366,20 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
         except Exception as exc:
             logger.warning("read_file intercept failed: %s — falling through", exc)
 
+    # ---- 1a2. Simple read — "read harness.py", "read harness" (smart resolve) --
+    m = _RE_READ_SIMPLE.match(text)
+    if m:
+        fname = m.group(1).strip().strip("'\"")
+        _system_words = ("clipboard", "screen", "system", "status", "prompt",
+                         "instructions", "memory", "mind")
+        if fname.lower() not in _system_words:
+            try:
+                return await tools.execute(
+                    "read_file", {"path": fname}, actor="intercept"
+                )
+            except Exception as exc:
+                logger.warning("read_simple intercept failed: %s — falling through", exc)
+
     # ---- 1b. Remember / preference (write directly to user.md) -----------
     m = _RE_REMEMBER.match(text)
     if m:
@@ -482,6 +513,18 @@ async def try_intercept(text: str, agent: AgentCore, user_id: str) -> str | None
             return f"Opened {latest.name} (most recently modified file in Downloads)."
         except Exception as exc:
             logger.warning("Latest-file intercept failed: %s", exc)
+
+    # ---- 7a. Background/overnight task — start_goal -----------------------
+    m = _RE_BACKGROUND_TASK.match(text)
+    if m:
+        task_desc = m.group(1).strip()
+        try:
+            result = await tools.execute(
+                "start_goal", {"description": task_desc}, actor="intercept"
+            )
+            return result
+        except Exception as exc:
+            logger.warning("Background task intercept failed: %s — falling through", exc)
 
     # ---- 7b. Screenshot + describe screen ---------------------------------
     _screen_match = re.match(

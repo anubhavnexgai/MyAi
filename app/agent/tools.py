@@ -204,11 +204,79 @@ class ToolRegistry:
     # ── Tool implementations ──
 
     async def _read_file(self, path: str) -> str:
-        content = await self.file_service.read_file(path)
-        # Truncate very long files for the LLM context
-        if len(content) > 8000:
-            return content[:8000] + f"\n\n... [truncated, {len(content)} chars total]"
+        import os
+        from pathlib import Path as _P
+
+        # If it's a valid absolute path, read directly
+        if os.path.isabs(path) and os.path.exists(path):
+            return self._truncate(await self.file_service.read_file(path))
+
+        # Smart resolve: search project + common dirs for partial name
+        resolved = self._resolve_file(path)
+        if resolved:
+            return self._truncate(await self.file_service.read_file(str(resolved)))
+
+        # Fallback: try original (will produce a clear error)
+        return self._truncate(await self.file_service.read_file(path))
+
+    @staticmethod
+    def _truncate(content: str, limit: int = 8000) -> str:
+        if len(content) > limit:
+            return content[:limit] + f"\n\n... [truncated, {len(content)} chars total]"
         return content
+
+    @staticmethod
+    def _resolve_file(query: str):
+        """Resolve a partial filename to a real path. Searches the MyAi project
+        tree first, then Downloads, Desktop, Documents."""
+        from pathlib import Path as _P
+        import os
+
+        query = query.strip().strip("'\"")
+        home = _P.home()
+        search_roots = [
+            home / "Downloads" / "myai",
+            home / "Downloads",
+            home / "OneDrive" / "Desktop",
+            home / "Desktop",
+            home / "OneDrive" / "Documents",
+            home / "Documents",
+        ]
+
+        query_lower = query.lower().replace("\\", "/")
+        query_name = query_lower.rsplit("/", 1)[-1]
+
+        best = None
+        best_score = 0
+
+        for root in search_roots:
+            if not root.exists():
+                continue
+            try:
+                for dirpath, dirnames, filenames in os.walk(root):
+                    dirnames[:] = [d for d in dirnames
+                                   if not d.startswith(".") and d not in ("__pycache__", ".venv", "node_modules", "chroma")]
+                    for fname in filenames:
+                        fname_lower = fname.lower()
+                        full = _P(dirpath) / fname
+                        score = 0
+                        if fname_lower == query_name:
+                            score = 100
+                        elif fname_lower.startswith(query_name):
+                            score = 80
+                        elif query_name in fname_lower:
+                            score = 60
+                        elif query_name.split(".")[0] in fname_lower.split(".")[0]:
+                            score = 50
+                        if "myai" in str(dirpath).lower():
+                            score += 10
+                        if score > best_score:
+                            best_score = score
+                            best = full
+            except PermissionError:
+                continue
+
+        return best if best_score >= 50 else None
 
     async def _list_directory(self, path: str) -> str:
         return await self.file_service.list_directory(path)
