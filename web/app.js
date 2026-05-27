@@ -1895,7 +1895,7 @@
         }
 
         function fetchTasks() {
-            fetch("/api/tasks")
+            fetch("/api/tasks?limit=15")
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     renderTasks(data.tasks || []);

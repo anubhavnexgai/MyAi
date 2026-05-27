@@ -3016,14 +3016,22 @@ textarea:focus:not(:focus-visible) {
 }
 
 .task-summary {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
-    padding: 10px 12px;
+    padding: 8px 12px;
     background: rgba(255, 255, 255, 0.02);
     border-radius: var(--radius);
     border: 1px solid var(--border-dim);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.task-card.expanded .task-summary {
+    -webkit-line-clamp: unset;
+    overflow: visible;
 }
 
 /* Progress bar */
