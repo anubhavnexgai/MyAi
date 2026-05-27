@@ -604,11 +604,17 @@ def get_tool_hints(task_type: str) -> List[str]:
 
 def build_tool_hint_prompt(task_type: str, tools: List[str]) -> str:
     """Build a concise hint string for system prompt injection."""
-    return (
+    hint = (
         f"[Task type: {task_type}] "
         f"Most relevant tools for this request: {', '.join(tools)}. "
         f"Prefer these tools. Only use others if these cannot accomplish the task."
     )
+    if task_type in ("creative_writing", "knowledge_query"):
+        hint += (
+            " IMPORTANT: Respond directly in chat. Do NOT use write_file or any file tool. "
+            "The user wants to see the content here, not saved to a file."
+        )
+    return hint
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
