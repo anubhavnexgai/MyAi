@@ -2767,7 +2767,6 @@ textarea:focus:not(:focus-visible) {
     transition: all var(--transition-normal);
     cursor: pointer;
     position: relative;
-    overflow: hidden;
 }
 
 .task-card::before {
