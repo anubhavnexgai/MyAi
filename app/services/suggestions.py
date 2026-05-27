@@ -8,6 +8,8 @@ from __future__ import annotations
 from typing import List, Optional
 
 _SUGGESTIONS: list[tuple[list[str], list[str]]] = [
+    (["goal #", "[done]", "[failed]", "[running]", "[pending]", "steps", "completed 2/"],
+     ["Show me the full results", "Start another background task", "What should I work on next?"]),
     (["file", "folder", "directory", "download", "document", ".pdf", ".docx"],
      ["Summarize this document", "Email it to my team", "Find related files"]),
     (["code", "python", "function", "def ", "class ", "bug", "error", "fix"],

@@ -1106,6 +1106,9 @@
         if (!responseText) return ["Draft an email", "Help me plan my day"];
         var t = responseText.toLowerCase();
 
+        if (/goal #\d+|\[done\]|\[failed\]|\[running\]|\[pending\]|completed \d+\/\d+ steps/.test(t)) {
+            return ["Show me the full results", "Start another background task"];
+        }
         if (/\b(file|folder|directory|download|document)\b/.test(t)) {
             return ["Summarize this document", "Email it to my team"];
         }
