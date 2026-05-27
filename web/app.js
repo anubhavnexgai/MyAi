@@ -1905,14 +1905,33 @@
                 });
         }
 
+        window._closeTasks = function () { closeTasksPanel(); };
+
         function renderTasks(tasks) {
+            // Update stats
+            var completed = tasks.filter(function(t){return t.status==="done"}).length;
+            var running = tasks.filter(function(t){return t.status==="running"}).length;
+            var failed = tasks.filter(function(t){return t.status==="failed"}).length;
+            var total = completed + failed;
+            var rate = total > 0 ? Math.round(completed / total * 100) : 0;
+            var $sc = document.getElementById("stat-completed");
+            var $sr = document.getElementById("stat-running");
+            var $sf = document.getElementById("stat-failed");
+            var $srt = document.getElementById("stat-rate");
+            if ($sc) $sc.textContent = completed;
+            if ($sr) $sr.textContent = running;
+            if ($sf) $sf.textContent = failed;
+            if ($srt) $srt.textContent = total > 0 ? rate + "%" : "--";
+
             if (!tasks.length) {
                 $tasksGrid.classList.add("hidden");
                 $tasksEmpty.classList.remove("hidden");
+                document.getElementById("tasks-stats").style.display = "none";
                 return;
             }
             $tasksGrid.classList.remove("hidden");
             $tasksEmpty.classList.add("hidden");
+            document.getElementById("tasks-stats").style.display = "";
 
             // Preserve expanded state
             var expandedIds = {};

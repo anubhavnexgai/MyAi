@@ -2683,6 +2683,10 @@ textarea:focus:not(:focus-visible) {
    TASKS PANEL
    ============================================ */
 
+/* ═══════════════════════════════════════════════════════════
+   TASKS PANEL — Premium Obsidian Design
+   ═══════════════════════════════════════════════════════════ */
+
 .tasks-panel {
     flex: 1;
     display: flex;
@@ -2717,11 +2721,82 @@ textarea:focus:not(:focus-visible) {
 
 .tasks-header h2 {
     font-family: var(--font-headline);
-    font-size: 16px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+.tasks-subtitle {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.tasks-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 0 24px 20px;
+}
+.stat-card {
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.stat-label {
+    font-size: 0.65rem;
+    font-family: var(--font-headline);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+}
+.stat-value {
+    font-size: 1.8rem;
+    font-family: var(--font-headline);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.stat-running { color: var(--accent); }
+.stat-failed { color: var(--error); }
+.stat-rate { color: var(--success); }
+
+.tasks-empty-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, var(--accent-dim), rgba(52,211,153,0.08));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+.tasks-empty-icon .material-symbols-outlined { font-size: 36px; color: var(--accent); }
+.tasks-empty h3 {
+    font-family: var(--font-headline);
+    font-size: 1.2rem;
     font-weight: 600;
     color: var(--text-primary);
-    letter-spacing: -0.3px;
+    margin-bottom: 8px;
 }
+.tasks-empty-examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+.tasks-example-chip {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.tasks-example-chip:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .tasks-grid {
     flex: 1;

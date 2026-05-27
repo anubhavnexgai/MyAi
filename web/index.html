@@ -450,19 +450,51 @@
                     <button id="btn-toggle-sidebar-tasks" class="icon-btn" title="Toggle sidebar">
                         <span class="material-symbols-outlined">menu</span>
                     </button>
-                    <h2>Background Tasks</h2>
+                    <div>
+                        <h2>Scheduled Tasks</h2>
+                        <p class="tasks-subtitle">Background operations and autonomous goals</p>
+                    </div>
                 </div>
                 <button id="tasks-close" class="icon-btn" title="Back to chat">
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
+
+            <!-- Stats Row -->
+            <div id="tasks-stats" class="tasks-stats">
+                <div class="stat-card">
+                    <span class="stat-label">Completed</span>
+                    <span class="stat-value" id="stat-completed">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Running</span>
+                    <span class="stat-value stat-running" id="stat-running">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Failed</span>
+                    <span class="stat-value stat-failed" id="stat-failed">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Success Rate</span>
+                    <span class="stat-value stat-rate" id="stat-rate">--%</span>
+                </div>
+            </div>
+
             <div id="tasks-grid" class="tasks-grid">
                 <!-- Cards inserted by JS -->
             </div>
+
             <div id="tasks-empty" class="tasks-empty hidden">
-                <span class="material-symbols-outlined" style="font-size:48px;color:var(--text-muted)">task_alt</span>
-                <p>No tasks yet. Ask MyAi to work on something in the background!</p>
-                <p class="tasks-empty-hint">Try: "research X overnight" or "analyze Y while I'm away"</p>
+                <div class="tasks-empty-icon">
+                    <span class="material-symbols-outlined">rocket_launch</span>
+                </div>
+                <h3>No tasks yet</h3>
+                <p>Ask MyAi to work on something in the background and it will show up here.</p>
+                <div class="tasks-empty-examples">
+                    <span class="tasks-example-chip" onclick="window._closeTasks && window._closeTasks(); window._sendSuggestion && window._sendSuggestion('research the latest AI trends and write a summary overnight')">research AI trends overnight</span>
+                    <span class="tasks-example-chip" onclick="window._closeTasks && window._closeTasks(); window._sendSuggestion && window._sendSuggestion('analyze my project code quality while I am away')">analyze code quality</span>
+                    <span class="tasks-example-chip" onclick="window._closeTasks && window._closeTasks(); window._sendSuggestion && window._sendSuggestion('create a competitive analysis report in the background')">competitive analysis</span>
+                </div>
             </div>
         </div>
 
