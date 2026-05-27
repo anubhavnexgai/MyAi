@@ -147,12 +147,12 @@
         try {
             const saved = JSON.parse(localStorage.getItem("myai_settings") || "{}");
             return {
-                userId: saved.userId || "web-user-" + Math.random().toString(36).slice(2, 8),
+                userId: "local-user",
                 userName: saved.userName || "User",
                 wsUrl: saved.wsUrl || "",
             };
         } catch {
-            return { userId: "web-user-1", userName: "User", wsUrl: "" };
+            return { userId: "local-user", userName: "User", wsUrl: "" };
         }
     }
 

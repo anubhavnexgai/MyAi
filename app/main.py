@@ -547,7 +547,7 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse()
     await ws.prepare(req)
 
-    user_id = "web-user-anon"
+    user_id = _LOCAL_USER_ID
     user_name = "User"
     auth_user = None  # Will hold the authenticated User object
     active_conversation_id = None  # Track which conversation the user is chatting in
@@ -648,9 +648,9 @@ async def websocket_handler(req: web.Request) -> web.WebSocketResponse:
                             })
                             continue
 
-                    # Fallback: legacy self-declared auth (backward compat)
-                    user_id = data.get("user_id", user_id)
-                    user_name = data.get("user_name", user_name)
+                    # No-auth mode: always use the local user ID for consistent history
+                    user_id = _LOCAL_USER_ID
+                    user_name = _LOCAL_USER_NAME
                     _ws_clients[user_id] = ws
                     logger.info(f"WebSocket auth (legacy): {user_name} ({user_id})")
                     await ws.send_json({
@@ -1540,7 +1540,7 @@ async def web_skills(req: web.Request) -> web.Response:
     if agenthub_client.is_configured and agenthub_client.is_available:
         try:
             # Try to get user_id from token for role-aware discovery
-            user_id = "web-user-anon"
+            user_id = _LOCAL_USER_ID
             token = _extract_token(req)
             if token:
                 token_user = await auth_service.validate_session(token)
