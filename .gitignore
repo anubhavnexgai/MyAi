@@ -45,5 +45,7 @@ app/workspace/agents/*/diary/
 app/workspace/skills/_staging/
 app/workspace/skills/*.py
 
-# User-specific workspace state appended by dreaming (template is committed)
+# User-specific workspace state (templates committed as .template files)
 app/workspace/learned_rules.md
+app/workspace/user.md
+app/workspace/learned_skills.json

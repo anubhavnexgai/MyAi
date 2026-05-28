@@ -299,10 +299,91 @@
 
     // -- Auth Flow --
     async function checkSetup() {
-        // Skip login — go directly to chat (personal agent, no auth needed)
         $authLoading.classList.add("hidden");
+        // Check if welcome flow is needed
+        try {
+            const r = await fetch("/api/welcome/status");
+            const data = await r.json();
+            if (!data.welcome_complete) {
+                showWelcomeFlow();
+                return;
+            }
+            settings.userName = data.user_name || settings.userName;
+        } catch {}
         currentUser = { id: "local-user", display_name: settings.userName, role_level: "super_admin" };
         showChat();
+    }
+
+    function showWelcomeFlow() {
+        const $welcome = document.getElementById("welcome-screen");
+        const $auth = document.getElementById("auth-screen");
+        if ($auth) $auth.classList.add("hidden");
+        if ($welcome) $welcome.classList.remove("hidden");
+        setTimeout(() => { document.getElementById("welcome-name")?.focus(); }, 200);
+
+        const $nameInput = document.getElementById("welcome-name");
+        const $emailInput = document.getElementById("welcome-email");
+        const $roleInput = document.getElementById("welcome-role");
+        const $aboutInput = document.getElementById("welcome-about");
+        const $submitBtn = document.getElementById("welcome-submit");
+        const $skipBtn = document.getElementById("welcome-skip");
+        const $errorBox = document.getElementById("welcome-error");
+
+        const finish = async (payload) => {
+            try {
+                $submitBtn.disabled = true;
+                $submitBtn.textContent = "Setting up...";
+                const r = await fetch("/api/welcome", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    $errorBox.textContent = data.error || "Setup failed.";
+                    $errorBox.classList.remove("hidden");
+                    $submitBtn.disabled = false;
+                    $submitBtn.textContent = "Continue";
+                    return;
+                }
+                settings.userName = data.user_name || payload.name || "User";
+                saveSettings();
+                $welcome.classList.add("hidden");
+                currentUser = { id: "local-user", display_name: settings.userName, role_level: "super_admin" };
+                showChat();
+            } catch (err) {
+                $errorBox.textContent = "Connection failed.";
+                $errorBox.classList.remove("hidden");
+                $submitBtn.disabled = false;
+                $submitBtn.textContent = "Continue";
+            }
+        };
+
+        $submitBtn.addEventListener("click", () => {
+            const name = $nameInput.value.trim();
+            if (!name) {
+                $errorBox.textContent = "Please enter your name.";
+                $errorBox.classList.remove("hidden");
+                return;
+            }
+            finish({
+                name,
+                email: $emailInput.value.trim(),
+                role: $roleInput.value.trim(),
+                about: $aboutInput.value.trim(),
+            });
+        });
+
+        $skipBtn.addEventListener("click", () => {
+            finish({ name: "User", email: "", role: "", about: "" });
+        });
+
+        // Enter to submit
+        [$nameInput, $emailInput, $roleInput].forEach(el => {
+            el && el.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") { e.preventDefault(); $submitBtn.click(); }
+            });
+        });
     }
 
     async function validateToken() {

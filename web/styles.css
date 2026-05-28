@@ -113,6 +113,119 @@ html, body {
    AUTH SCREEN
    ============================================ */
 
+/* ── Welcome Flow ── */
+.welcome-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(ellipse 60% 50% at 50% 30%, rgba(99,102,241,0.10) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(52,211,153,0.05) 0%, transparent 60%),
+        var(--bg-primary);
+    z-index: 300;
+}
+.welcome-screen.hidden { display: none; }
+.welcome-container { width: 480px; max-width: 92%; animation: authFadeIn 0.6s cubic-bezier(0.16,1,0.3,1); }
+.welcome-logo { text-align: center; margin-bottom: 28px; }
+.welcome-logo h1 {
+    font-family: var(--font-headline);
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #818cf8 0%, #6366f1 40%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.welcome-subtitle {
+    font-family: var(--font-headline);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--text-muted);
+    margin-top: 6px;
+}
+.welcome-card {
+    background: var(--bg-glass-strong);
+    backdrop-filter: blur(40px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    box-shadow: var(--shadow-lg);
+}
+.welcome-card h2 {
+    font-family: var(--font-headline);
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+.welcome-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+.welcome-field { margin-bottom: 14px; }
+.welcome-field label {
+    display: block;
+    font-family: var(--font-headline);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+.welcome-field .optional {
+    color: var(--text-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.7;
+}
+.welcome-field input,
+.welcome-field textarea {
+    width: 100%;
+    padding: 11px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+    resize: vertical;
+}
+.welcome-field input:focus,
+.welcome-field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.welcome-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+.welcome-actions .auth-btn { flex: 1; }
+.welcome-btn-secondary {
+    padding: 11px 20px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.welcome-btn-secondary:hover {
+    background: var(--surface-2);
+    color: var(--text-primary);
+}
+
 .auth-screen {
     position: fixed;
     inset: 0;

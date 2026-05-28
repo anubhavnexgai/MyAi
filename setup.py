@@ -27,7 +27,37 @@ def yellow(text: str) -> str:
     return f"\033[93m{text}\033[0m"
 
 
+def _auto_detect_user():
+    """Try to detect user info from the OS without prompting."""
+    import getpass
+    username = getpass.getuser()
+    full_name = username
+    if sys.platform == "win32":
+        try:
+            import subprocess
+            r = subprocess.run(["net", "user", username], capture_output=True, text=True, timeout=3)
+            for line in r.stdout.splitlines():
+                if line.lower().startswith("full name"):
+                    parts = line.split(None, 2)
+                    if len(parts) >= 3 and parts[2].strip():
+                        full_name = parts[2].strip()
+                    break
+        except Exception:
+            pass
+    else:
+        try:
+            import pwd
+            pw = pwd.getpwuid(os.getuid())
+            if pw.pw_gecos:
+                full_name = pw.pw_gecos.split(",")[0] or username
+        except Exception:
+            pass
+    return full_name, username
+
+
 def main():
+    auto = "--auto" in sys.argv or not sys.stdin.isatty()
+
     print()
     print(bold("=" * 60))
     print(bold("  MyAi — Personal AI Agent Setup"))
@@ -40,31 +70,39 @@ def main():
     if not ollama_path:
         print(yellow("  WARNING: 'ollama' not found in PATH."))
         print("  Install from: https://ollama.com")
-        print("  MyAi needs Ollama running locally for the LLM.")
-        print()
     else:
         print(green(f"  Found: {ollama_path}"))
-        print()
-
-    # Step 2: Collect user info
-    print(bold("[2/5] Your Identity"))
-    print("  (This personalizes your AI assistant)")
     print()
-    name = input("  Your name: ").strip()
-    email = input("  Your email: ").strip()
-    role = input("  Your role (e.g. 'Software Engineer at Acme'): ").strip()
-    phone = input("  Your phone (with country code, e.g. +919876543210, or leave blank): ").strip()
+
+    # Step 2: Collect user info (auto-detect or prompt)
+    print(bold("[2/5] Your Identity"))
+    if auto:
+        name, username = _auto_detect_user()
+        email = f"{username}@localhost"
+        role = ""
+        phone = ""
+        print(f"  Auto-detected: {name} ({email})")
+    else:
+        print("  (This personalizes your AI assistant — press Enter to auto-detect)")
+        name = input("  Your name: ").strip()
+        if not name:
+            name, _ = _auto_detect_user()
+        email = input("  Your email: ").strip()
+        role = input("  Your role (e.g. 'Software Engineer at Acme'): ").strip()
+        phone = input("  Your phone (with country code, or blank): ").strip()
     print()
 
     # Step 3: Create .env
     print(bold("[3/5] Creating .env configuration..."))
     if ENV_FILE.exists():
-        overwrite = input("  .env already exists. Overwrite? [y/N]: ").strip().lower()
-        if overwrite != "y":
-            print("  Skipping .env creation.")
-            print()
+        if auto:
+            print("  .env exists, keeping it.")
         else:
-            _create_env(name, email, role, phone)
+            overwrite = input("  .env already exists. Overwrite? [y/N]: ").strip().lower()
+            if overwrite != "y":
+                print("  Skipping .env creation.")
+            else:
+                _create_env(name, email, role, phone)
     else:
         _create_env(name, email, role, phone)
     print()

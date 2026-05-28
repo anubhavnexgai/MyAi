@@ -1,0 +1,22 @@
+# User
+
+**Name:** (set MYAI_USER_NAME in .env or complete the welcome flow)
+**Email:** (set MYAI_USER_EMAIL in .env)
+**Role:** (set MYAI_USER_ROLE in .env)
+
+## Working style
+
+- (Edit this file to tell MyAi about your preferences)
+- Example: "Wants concise responses, prefers bullet points"
+
+## Environment
+
+- **OS:** (detected automatically)
+- **LLM:** Ollama (local)
+
+## Things to remember
+
+(This section is appended to by the dreaming/diary loop. Do not delete user
+edits above this line.)
+
+<!-- DREAMING_APPEND_BELOW -->

@@ -1664,6 +1664,90 @@ async def tasks_cancel(req: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def welcome_status(req: web.Request) -> web.Response:
+    """Check if the user has completed first-time welcome."""
+    name = (settings.myai_user_name or "").strip()
+    has_real_name = bool(name) and "your name" not in name.lower() and name.lower() not in ("user", "")
+    return web.json_response({
+        "welcome_complete": has_real_name,
+        "user_name": name if has_real_name else "",
+    })
+
+
+async def welcome_save(req: web.Request) -> web.Response:
+    """Save the user's welcome-flow input: name, about, email."""
+    try:
+        body = await req.json()
+        name = (body.get("name") or "").strip()
+        about = (body.get("about") or "").strip()
+        email = (body.get("email") or "").strip()
+        role = (body.get("role") or "").strip()
+
+        if not name:
+            return web.json_response({"error": "Name is required"}, status=400)
+
+        # Update .env file
+        env_path = Path(".env")
+        env_lines = []
+        if env_path.exists():
+            env_lines = env_path.read_text(encoding="utf-8").splitlines()
+
+        def _upsert(key: str, val: str):
+            for i, line in enumerate(env_lines):
+                if line.startswith(f"{key}="):
+                    env_lines[i] = f"{key}={val}"
+                    return
+            env_lines.append(f"{key}={val}")
+
+        _upsert("MYAI_USER_NAME", name)
+        if email: _upsert("MYAI_USER_EMAIL", email)
+        if role: _upsert("MYAI_USER_ROLE", role)
+
+        env_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
+
+        # Update workspace/user.md
+        user_md = Path(__file__).parent / "workspace" / "user.md"
+        user_md.parent.mkdir(parents=True, exist_ok=True)
+        about_block = f"\n## About me\n\n{about}\n" if about else ""
+        user_md.write_text(
+            f"""# User
+
+**Name:** {name}
+**Email:** {email or '(not set)'}
+**Role:** {role or '(not set)'}
+{about_block}
+## Working style
+
+- (Edit this file to tell MyAi about your preferences)
+
+## Things to remember
+
+(This section is appended to by the dreaming/diary loop. Do not delete user
+edits above this line.)
+
+<!-- DREAMING_APPEND_BELOW -->
+""",
+            encoding="utf-8",
+        )
+
+        # Update settings in-memory so the rest of the session uses the new values
+        settings.myai_user_name = name
+        if email: settings.myai_user_email = email
+        if role: settings.myai_user_role = role
+
+        # Reload persona cache so new user.md is picked up
+        try:
+            from app.agent.persona import get_persona_loader
+            get_persona_loader()._cache.clear()
+        except Exception:
+            pass
+
+        return web.json_response({"success": True, "user_name": name})
+    except Exception as e:
+        logger.error(f"Welcome save error: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def web_index(req: web.Request) -> web.FileResponse:
     """Serve the Web UI index page."""
     return web.FileResponse(Path(__file__).parent.parent / "web" / "index.html")
@@ -1711,6 +1795,8 @@ def create_debug_app() -> web.Application:
     app.router.add_get("/api/web/status", web_status)
     app.router.add_get("/api/web/skills", web_skills)
     app.router.add_get("/api/mcp/servers", mcp_servers_list)
+    app.router.add_get("/api/welcome/status", welcome_status)
+    app.router.add_post("/api/welcome", welcome_save)
 
     # Tasks (background goals) API
     app.router.add_get("/api/tasks", tasks_list)

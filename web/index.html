@@ -14,6 +14,43 @@
     <div id="app">
 
         <!-- Auth Screen -->
+        <!-- Welcome Flow (first-time setup) -->
+        <div id="welcome-screen" class="welcome-screen hidden">
+            <div class="welcome-container">
+                <div class="welcome-logo">
+                    <h1>MyAi</h1>
+                    <p class="welcome-subtitle">Your personal AI agent</p>
+                </div>
+                <div class="welcome-card">
+                    <h2 id="welcome-step-title">Welcome — let's get you set up</h2>
+                    <p class="welcome-desc">This takes 30 seconds. Everything stays on your machine.</p>
+
+                    <div class="welcome-field">
+                        <label for="welcome-name">What's your name?</label>
+                        <input type="text" id="welcome-name" placeholder="e.g. Anubhav" autocomplete="off">
+                    </div>
+                    <div class="welcome-field">
+                        <label for="welcome-email">Email <span class="optional">(optional)</span></label>
+                        <input type="email" id="welcome-email" placeholder="you@example.com" autocomplete="off">
+                    </div>
+                    <div class="welcome-field">
+                        <label for="welcome-role">Role <span class="optional">(optional)</span></label>
+                        <input type="text" id="welcome-role" placeholder="e.g. Software Engineer at Acme" autocomplete="off">
+                    </div>
+                    <div class="welcome-field">
+                        <label for="welcome-about">Tell me about yourself <span class="optional">(optional)</span></label>
+                        <textarea id="welcome-about" rows="3" placeholder="What do you work on? What kind of help do you usually need? This helps me give better answers."></textarea>
+                    </div>
+
+                    <div id="welcome-error" class="auth-error hidden"></div>
+                    <div class="welcome-actions">
+                        <button id="welcome-skip" class="welcome-btn-secondary">Skip for now</button>
+                        <button id="welcome-submit" class="auth-btn">Continue</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="auth-screen" class="auth-screen">
             <div class="auth-container">
                 <div class="auth-logo">
