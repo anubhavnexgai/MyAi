@@ -41,8 +41,8 @@ if not exist ".venv\Scripts\python.exe" (
     echo  [SETUP] Creating virtual environment...
     python -m venv .venv
     call .venv\Scripts\activate.bat
-    echo  [SETUP] Installing dependencies...
-    pip install -e . -q
+    echo  [SETUP] Installing dependencies (this takes 2-3 min on first install)...
+    pip install -r requirements.txt -q
     echo  [OK] Dependencies installed
 ) else (
     call .venv\Scripts\activate.bat

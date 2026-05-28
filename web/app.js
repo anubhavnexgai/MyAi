@@ -1618,7 +1618,17 @@
     function fetchSkills() {
         fetch("/api/web/skills")
             .then(function (r) { return r.json(); })
-            .then(function (data) { renderSkills(data.skills || []); })
+            .then(function (data) {
+                var skills = data.skills || [];
+                // Only show panel if there are external agents (not just the default "general" local one)
+                var external = skills.filter(function (s) { return s.source && s.source !== "local"; });
+                var $panel = document.getElementById("skills-panel");
+                if ($panel) {
+                    if (external.length > 0) $panel.classList.remove("hidden");
+                    else $panel.classList.add("hidden");
+                }
+                renderSkills(external);
+            })
             .catch(function () {});
     }
 

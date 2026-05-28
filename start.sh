@@ -49,8 +49,8 @@ if [ ! -f ".venv/bin/python" ] && [ ! -f ".venv/Scripts/python.exe" ]; then
     echo -e "[SETUP] Creating virtual environment..."
     $PY -m venv .venv
     source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate 2>/dev/null
-    echo -e "[SETUP] Installing dependencies..."
-    pip install -e . -q
+    echo -e "[SETUP] Installing dependencies (2-3 min on first install)..."
+    pip install -r requirements.txt -q
     echo -e "${GREEN}[OK]${NC} Dependencies installed"
 else
     source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate 2>/dev/null
