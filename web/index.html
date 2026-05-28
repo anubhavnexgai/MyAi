@@ -180,6 +180,30 @@
                 </div>
             </div>
 
+            <!-- Model Selector Modal -->
+            <div id="model-modal" class="modal-overlay hidden">
+                <div class="modal-content model-modal-content">
+                    <div class="modal-header">
+                        <h3>Choose Model</h3>
+                        <button id="model-modal-close" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="modal-hint">Switch the LLM that powers MyAi. Smaller models are faster, larger ones are smarter.</p>
+                        <div id="model-list" class="model-list">
+                            <div class="model-loading">Loading models...</div>
+                        </div>
+                        <div class="model-pull-section">
+                            <p class="modal-hint" style="margin-top:16px">Pull a new model from Ollama:</p>
+                            <div class="model-pull-row">
+                                <input type="text" id="model-pull-input" placeholder="e.g. llama3.1:8b, mistral:7b, gemma2:9b" />
+                                <button id="model-pull-btn" class="connector-btn">Pull</button>
+                            </div>
+                            <p class="model-pull-hint">Browse all models at <a href="https://ollama.com/library" target="_blank">ollama.com/library</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Primary Navigation -->
             <nav class="sidebar-nav">
                 <button id="btn-new-chat" class="nav-btn nav-btn-active">
@@ -415,9 +439,10 @@
                         <span class="material-symbols-outlined pause-icon">pause</span>
                         <span class="pause-label">Pause</span>
                     </button>
-                    <div id="model-pill" class="model-pill">
+                    <button id="model-pill" class="model-pill" title="Click to change model">
                         <span id="model-pill-name" class="model-pill-text">--</span>
-                    </div>
+                        <span class="material-symbols-outlined model-pill-chevron">expand_more</span>
+                    </button>
                     <div id="ms365-pill" class="ms365-pill">
                         <span class="material-symbols-outlined ms365-icon">cloud</span>
                         <span id="ms365-status-text" class="ms365-text">M365</span>

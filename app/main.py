@@ -1664,6 +1664,103 @@ async def tasks_cancel(req: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def models_list(req: web.Request) -> web.Response:
+    """List available Ollama models + current selection."""
+    try:
+        models = await ollama_client.list_models()
+        # Each model dict has 'name', 'size', etc. Normalize.
+        formatted = []
+        for m in models:
+            name = m.get("name") or m.get("model") or ""
+            if not name:
+                continue
+            size = m.get("size", 0)
+            size_gb = round(size / (1024**3), 1) if size else 0
+            formatted.append({
+                "name": name,
+                "size_gb": size_gb,
+                "current": name == ollama_client.model,
+            })
+        return web.json_response({
+            "models": formatted,
+            "current": ollama_client.model,
+        })
+    except Exception as e:
+        logger.error(f"Models list error: {e}", exc_info=True)
+        return web.json_response({"error": str(e), "models": [], "current": ollama_client.model}, status=200)
+
+
+async def models_set(req: web.Request) -> web.Response:
+    """Switch the active Ollama model."""
+    try:
+        body = await req.json()
+        model = (body.get("model") or "").strip()
+        if not model:
+            return web.json_response({"error": "model is required"}, status=400)
+
+        # Verify the model is available
+        available = await ollama_client.list_models()
+        names = [m.get("name") or m.get("model") for m in available]
+        if model not in names:
+            return web.json_response(
+                {"error": f"Model '{model}' not found. Pull it first with: ollama pull {model}"},
+                status=400,
+            )
+
+        # Update the running client
+        ollama_client.model = model
+        settings.ollama_model = model
+
+        # Persist to .env
+        from pathlib import Path as _P
+        env_path = _P(".env")
+        if env_path.exists():
+            lines = env_path.read_text(encoding="utf-8").splitlines()
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith("OLLAMA_MODEL="):
+                    lines[i] = f"OLLAMA_MODEL={model}"
+                    found = True
+                    break
+            if not found:
+                lines.append(f"OLLAMA_MODEL={model}")
+            env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        return web.json_response({"success": True, "model": model})
+    except Exception as e:
+        logger.error(f"Models set error: {e}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def models_pull(req: web.Request) -> web.Response:
+    """Pull a new Ollama model (long-running, returns immediately, model appears in list when done)."""
+    try:
+        body = await req.json()
+        model = (body.get("model") or "").strip()
+        if not model:
+            return web.json_response({"error": "model is required"}, status=400)
+
+        import asyncio as _asyncio
+        import httpx as _httpx
+        async def _pull():
+            try:
+                async with _httpx.AsyncClient(timeout=None) as c:
+                    async with c.stream(
+                        "POST",
+                        f"{settings.ollama_base_url}/api/pull",
+                        json={"name": model, "stream": True},
+                    ) as r:
+                        async for _ in r.aiter_lines():
+                            pass
+                logger.info(f"Model pull complete: {model}")
+            except Exception as e:
+                logger.warning(f"Model pull failed: {e}")
+        _asyncio.create_task(_pull())
+        return web.json_response({"started": True, "model": model})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def welcome_status(req: web.Request) -> web.Response:
     """Check if the user has completed first-time welcome."""
     name = (settings.myai_user_name or "").strip()
@@ -1797,6 +1894,9 @@ def create_debug_app() -> web.Application:
     app.router.add_get("/api/mcp/servers", mcp_servers_list)
     app.router.add_get("/api/welcome/status", welcome_status)
     app.router.add_post("/api/welcome", welcome_save)
+    app.router.add_get("/api/models", models_list)
+    app.router.add_post("/api/models/select", models_set)
+    app.router.add_post("/api/models/pull", models_pull)
 
     # Tasks (background goals) API
     app.router.add_get("/api/tasks", tasks_list)

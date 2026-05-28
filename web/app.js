@@ -1869,6 +1869,93 @@
             setTimeout(connect, 500);
         });
 
+        // ── Model selector modal ──
+        var $modelPillBtn = document.getElementById("model-pill");
+        var $modelModal = document.getElementById("model-modal");
+        var $modelModalClose = document.getElementById("model-modal-close");
+        var $modelList = document.getElementById("model-list");
+        var $modelPullInput = document.getElementById("model-pull-input");
+        var $modelPullBtn = document.getElementById("model-pull-btn");
+
+        function fetchModelList() {
+            $modelList.innerHTML = '<div class="model-loading">Loading...</div>';
+            fetch("/api/models")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var models = data.models || [];
+                    if (!models.length) {
+                        $modelList.innerHTML = '<div class="model-loading">No models found. Pull one below.</div>';
+                        return;
+                    }
+                    $modelList.innerHTML = "";
+                    models.forEach(function (m) {
+                        var item = document.createElement("div");
+                        item.className = "model-item" + (m.current ? " current" : "");
+                        item.innerHTML =
+                            '<div class="model-item-info">' +
+                                '<span class="model-item-name">' + escapeHtmlStr(m.name) + '</span>' +
+                                '<span class="model-item-size">' + (m.size_gb ? m.size_gb + ' GB' : 'size unknown') + '</span>' +
+                            '</div>' +
+                            (m.current ? '<span class="model-item-badge">Active</span>' : '<button class="connector-btn">Use</button>');
+                        if (!m.current) {
+                            item.addEventListener("click", function () { selectModel(m.name); });
+                        }
+                        $modelList.appendChild(item);
+                    });
+                })
+                .catch(function () {
+                    $modelList.innerHTML = '<div class="model-loading">Failed to load models. Is Ollama running?</div>';
+                });
+        }
+
+        function selectModel(name) {
+            fetch("/api/models/select", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: name }),
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        if ($modelPillName) $modelPillName.textContent = name;
+                        fetchModelList();
+                        setTimeout(function () { $modelModal.classList.add("hidden"); }, 600);
+                    } else {
+                        alert(data.error || "Failed to switch model");
+                    }
+                });
+        }
+
+        if ($modelPillBtn) {
+            $modelPillBtn.addEventListener("click", function () {
+                $modelModal.classList.remove("hidden");
+                fetchModelList();
+            });
+            $modelModalClose.addEventListener("click", function () { $modelModal.classList.add("hidden"); });
+            $modelModal.addEventListener("click", function (e) {
+                if (e.target === $modelModal) $modelModal.classList.add("hidden");
+            });
+            $modelPullBtn.addEventListener("click", function () {
+                var name = ($modelPullInput.value || "").trim();
+                if (!name) return;
+                $modelPullBtn.disabled = true;
+                $modelPullBtn.textContent = "Pulling...";
+                fetch("/api/models/pull", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ model: name }),
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function () {
+                        $modelPullInput.value = "";
+                        $modelPullBtn.disabled = false;
+                        $modelPullBtn.textContent = "Pull";
+                        setTimeout(fetchModelList, 3000);
+                        alert("Pull started for " + name + ". This may take several minutes. The model will appear in the list when ready.");
+                    });
+            });
+        }
+
         // ── Connectors modal ──
         var $connBtn = document.getElementById("btn-connectors");
         var $connModal = document.getElementById("connectors-modal");
