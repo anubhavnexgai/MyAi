@@ -1,31 +1,72 @@
 version: "3.8"
 
 services:
+  # Ollama — local LLM runtime. First-run model pull happens in the model-puller service.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: myai-ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # Uncomment to enable GPU passthrough (Linux + NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # One-shot service that pulls the models on first launch, then exits.
+  model-puller:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: >
+      sh -c "
+        echo '[puller] Checking models...';
+        ollama list | grep -q 'qwen2.5:7b' || ollama pull qwen2.5:7b;
+        ollama list | grep -q 'nomic-embed-text' || ollama pull nomic-embed-text;
+        echo '[puller] Done.';
+      "
+    restart: "no"
+
+  # MyAi — the agent itself
   myai:
     build: .
+    image: myai:local
+    container_name: myai-app
     ports:
       - "8001:8001"
-    env_file:
-      - .env
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./app/workspace:/app/app/workspace
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_BASE_URL=http://ollama:11434
       - HOST=0.0.0.0
       - PORT=8001
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - myai-data:/app/data
+      - myai-workspace:/app/app/workspace
+    depends_on:
+      ollama:
+        condition: service_healthy
+      model-puller:
+        condition: service_completed_successfully
     restart: unless-stopped
 
-  # Optional: Expose via ngrok for mobile/remote access
-  # ngrok:
-  #   image: ngrok/ngrok:latest
-  #   command: http myai:8001
-  #   environment:
-  #     - NGROK_AUTHTOKEN=your-ngrok-auth-token
-  #   ports:
-  #     - "4040:4040"
-  #   depends_on:
-  #     - myai
+volumes:
+  ollama-data:
+  myai-data:
+  myai-workspace:

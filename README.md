@@ -2,6 +2,54 @@
 
 A locally-running personal AI agent powered by **Ollama**. Runs entirely on your machine — your data never leaves. Accessible via **Web UI**, **WhatsApp**, and **Slack**.
 
+---
+
+## Install — Pick One
+
+### Option 1: Docker (Recommended — easiest, works everywhere)
+
+**Only requirement: Docker Desktop installed** ([download](https://docker.com/products/docker-desktop))
+
+```bash
+git clone https://github.com/anubhavnexgai/MyAi.git
+cd MyAi
+
+# Windows:
+docker-start.bat
+
+# macOS / Linux:
+chmod +x docker-start.sh && ./docker-start.sh
+```
+
+That's it. The script:
+1. Builds the MyAi container (~2 min, one-time)
+2. Pulls Ollama + qwen2.5:7b + nomic-embed-text models (~5 GB, one-time download)
+3. Starts everything
+4. Opens **http://localhost:8001**
+
+**Stop**: `docker compose down` · **Restart**: `docker compose up -d`
+
+### Option 2: Native install (lighter, but needs Python + Ollama on host)
+
+```bash
+git clone https://github.com/anubhavnexgai/MyAi.git
+cd MyAi
+
+# Windows:
+start.bat
+
+# macOS / Linux:
+chmod +x start.sh && ./start.sh
+```
+
+You need: Python 3.11+ and [Ollama](https://ollama.com) pre-installed. The script handles the rest (venv, deps, model pull, launch).
+
+### First Launch
+
+A **welcome screen** asks for your name (required) and email/role/about (optional). Click Continue → personalized chat opens.
+
+---
+
 ## Features
 
 ### Core
@@ -33,39 +81,6 @@ A locally-running personal AI agent powered by **Ollama**. Runs entirely on your
 - **Admin Dashboard** — Analytics, user management, system health
 - **Self-Learning Loop** — Feedback-driven prompt refinements
 - **Guardrails** — Policy-based security for all tool calls
-
-## Quick Start
-
-### Prerequisites
-
-1. **Python 3.11+**
-2. **Ollama** — Install from [ollama.com](https://ollama.com)
-
-### One-Command Install
-
-```bash
-git clone https://github.com/anubhavnexgai/MyAi.git
-cd MyAi
-
-# Windows:
-start.bat
-
-# macOS / Linux:
-chmod +x start.sh && ./start.sh
-```
-
-That's it. The script automatically:
-1. Checks Python & Ollama (prompts to install if missing)
-2. Creates virtual environment + installs dependencies
-3. Auto-detects your name from the OS and creates `.env`
-4. Starts Ollama and pulls required models (one-time ~5 GB download)
-5. Launches MyAi and opens **http://localhost:8001** in your browser
-
-### First Login
-
-1. On first visit, you'll be prompted to create an admin account
-2. Set your email, name, and password
-3. Start chatting!
 
 ## Configuration
 
